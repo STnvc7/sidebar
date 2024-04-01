@@ -1,13 +1,8 @@
 use std::path::PathBuf;
 
 use std::io::stdout;
-use crossterm::{
-    cursor, execute, ExecutableCommand, terminal,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    event::{read, Event, KeyCode},
-};
 
-use crate::cursor_control;
+use crossterm::{cursor, execute};
 
 #[derive(Debug, PartialEq)]
 enum NodeType{
@@ -78,22 +73,20 @@ impl Node{
             execute!(stdout(), cursor::MoveTo(0,0));
         }
 
-        cursor_control::to_edge_cursor();
-
         //このノードの情報を出力
         let name = &self.name;               //ファイル/フォルダ名
         let indent = String::from("   ");   //成形用のインデントの元　改装に応じてrepeatさせる
 
-        let output_color = if self.opened{SetForegroundColor(Color::Green)} else {SetForegroundColor(Color::Black)};
+        let output_color = if self.opened{} else {};
 
         //ノードの種類ごとで出力形式を分ける
         let output = match &self.node_type{
-            NodeType::Folder => format!("{}> {}\n",indent.repeat(rank), name),    //フォルダの時は >マークを先頭につける
-            NodeType::File => format!("{}{}\n",indent.repeat(rank), name),
+            NodeType::Folder => format!("{}> {}",indent.repeat(rank), name),    //フォルダの時は >マークを先頭につける
+            NodeType::File => format!("{}{}",indent.repeat(rank), name),
             };
-        
-        execute!(stdout(), output_color, Print(output));
-        
+
+        println!("{}", output);
+
         //ノードが開かれているときは子ノードを展開して再起的に出力
         //tree.childがNoneの時はreturnして再帰を終了
         if self.opened{
