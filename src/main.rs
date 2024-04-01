@@ -1,6 +1,5 @@
 mod node;
 mod app;
-mod cursor_control;
 
 use std::io::{stdout, Result};
 
@@ -9,8 +8,7 @@ use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternate
 
 #[warn(unused_imports)]
 fn main(){
-    execute!(stdout(), Clear(terminal::ClearType::All));
-    //execute!(stdout(), EnterAlternateScreen);
+    execute!(stdout(), cursor::Hide, Clear(terminal::ClearType::All));
     app::run();
-    //execute!(stdout(), LeaveAlternateScreen);
+    execute!(stdout(), cursor::Show);
 }

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
-
 use std::io::stdout;
 
-use crossterm::{cursor, execute};
+use crossterm::{cursor, execute, queue, style};
+use crossterm::style::{Print, Color, SetForegroundColor};
 
 #[derive(Debug, PartialEq)]
 enum NodeType{
@@ -10,6 +10,7 @@ enum NodeType{
     File,
 }
 
+//ファイルの木構造を構成するノード
 #[derive(Debug)]
 pub struct Node{
     name    : String,
@@ -20,8 +21,33 @@ pub struct Node{
     selected: bool,
     ignore  : bool,
 }
+//----------------------------------
 
+//最初のノードを作る関数
+pub fn new_node(target: PathBuf) -> Result<Box<Node>, String>{
+
+    if !target.is_dir(){
+        return Err(String::from(format!("Error : {} is not a folder", target.into_os_string().into_string().unwrap())))
+    }
+
+    let new_node = Box::new(Node{
+                    name: target.file_name().unwrap().to_string_lossy().into_owned(),
+                    path: target,
+                    node_type: NodeType::Folder,
+                    childs: None,
+                    opened: false,
+                    selected: true,
+                    ignore: false,
+                    });
+    return Ok(new_node)
+}
+
+//ノードのメソッド
 impl Node{
+
+    pub fn is_opened(&self) -> bool{
+        return self.opened
+    }
 
     pub fn open_node(&mut self){
         
@@ -66,6 +92,11 @@ impl Node{
         return
     }
 
+    pub fn close_node(&mut self){
+        self.childs = None;
+        self.opened = false;
+    }
+
     pub fn print_tree(&self, rank : usize){
 
         //ルートの時はカーソルを一番上に移動
@@ -77,7 +108,8 @@ impl Node{
         let name = &self.name;               //ファイル/フォルダ名
         let indent = String::from("   ");   //成形用のインデントの元　改装に応じてrepeatさせる
 
-        let output_color = if self.opened{} else {};
+        //選択されているノードは緑で表示
+        let output_color = if self.selected {"\x1b[32m"} else {"\x1b[37m"};
 
         //ノードの種類ごとで出力形式を分ける
         let output = match &self.node_type{
@@ -85,7 +117,9 @@ impl Node{
             NodeType::File => format!("{}{}",indent.repeat(rank), name),
             };
 
-        println!("{}", output);
+        //出力
+        print!("{}{}", output_color, output);
+        execute!(stdout(), cursor::MoveToNextLine(1));
 
         //ノードが開かれているときは子ノードを展開して再起的に出力
         //tree.childがNoneの時はreturnして再帰を終了
@@ -102,21 +136,3 @@ impl Node{
     }
 }
 
-pub fn new_node(target: PathBuf) -> Result<Box<Node>, String>{
-
-    if !target.is_dir(){
-        return Err(String::from(format!("Error : {} is not a folder", target.into_os_string().into_string().unwrap())))
-    }
-
-    let new_node = Box::new(Node{
-                    name: target.file_name().unwrap().to_string_lossy().into_owned(),
-                    path: target,
-                    node_type: NodeType::Folder,
-                    childs: None,
-                    opened: false,
-                    selected: true,
-                    ignore: false,
-                    });
-
-    return Ok(new_node)
-}
