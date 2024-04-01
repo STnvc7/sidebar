@@ -15,11 +15,13 @@ pub fn run() -> io::Result<()>{
 
 	let root = env::current_dir().unwrap();
     let mut root_node = node::new_node(root).unwrap();
-    
+    let selected_node = &mut root_node;
 
     terminal::enable_raw_mode()?;
     loop{
         root_node.print_tree(0);
+
+
         // イベントの取得
         let event = read()?;
 
@@ -68,7 +70,7 @@ fn execute_command_from_key_event(key : KeyEvent, tree : &mut node::Node) -> Res
         }
 
         KeyCode::Down => {
-            
+            Ok(1)
         }
 
         KeyCode::Char(c)   => Err(String::from(format!("{} is invalid command", c))),

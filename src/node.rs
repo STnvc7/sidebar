@@ -10,6 +10,7 @@ enum NodeType{
     File,
 }
 
+//ファイルの木構造を構成するノード
 #[derive(Debug)]
 pub struct Node{
     name    : String,
@@ -20,7 +21,28 @@ pub struct Node{
     selected: bool,
     ignore  : bool,
 }
+//----------------------------------
 
+//最初のノードを作る関数
+pub fn new_node(target: PathBuf) -> Result<Box<Node>, String>{
+
+    if !target.is_dir(){
+        return Err(String::from(format!("Error : {} is not a folder", target.into_os_string().into_string().unwrap())))
+    }
+
+    let new_node = Box::new(Node{
+                    name: target.file_name().unwrap().to_string_lossy().into_owned(),
+                    path: target,
+                    node_type: NodeType::Folder,
+                    childs: None,
+                    opened: false,
+                    selected: true,
+                    ignore: false,
+                    });
+    return Ok(new_node)
+}
+
+//ノードのメソッド
 impl Node{
 
     pub fn is_opened(&self) -> bool{
@@ -114,21 +136,3 @@ impl Node{
     }
 }
 
-pub fn new_node(target: PathBuf) -> Result<Box<Node>, String>{
-
-    if !target.is_dir(){
-        return Err(String::from(format!("Error : {} is not a folder", target.into_os_string().into_string().unwrap())))
-    }
-
-    let new_node = Box::new(Node{
-                    name: target.file_name().unwrap().to_string_lossy().into_owned(),
-                    path: target,
-                    node_type: NodeType::Folder,
-                    childs: None,
-                    opened: false,
-                    selected: true,
-                    ignore: false,
-                    });
-
-    return Ok(new_node)
-}
