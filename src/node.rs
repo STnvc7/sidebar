@@ -15,8 +15,12 @@ enum NodeType{
 pub struct Node{
     name    : String,
     path    : PathBuf,
-    childs  : Option<Vec<Box<Node>>>,
+    childs  : Vec<Box<Node>>,
     node_type    : NodeType,
+
+    num_childs : usize,
+    selected_child : usize,
+
     opened  : bool,
     selected: bool,
     ignore  : bool,
@@ -34,7 +38,9 @@ pub fn new_node(target: PathBuf) -> Result<Box<Node>, String>{
                     name: target.file_name().unwrap().to_string_lossy().into_owned(),
                     path: target,
                     node_type: NodeType::Folder,
-                    childs: None,
+                    childs: Vec::new(),
+                    num_childs: 0,
+                    selected_child: 0,
                     opened: false,
                     selected: true,
                     ignore: false,
@@ -49,12 +55,66 @@ impl Node{
         return self.opened
     }
 
-    pub fn open_node(&mut self){
-        
-        self.opened = true;                             //Node構造体のopen属性をtrueに
+    pub fn select_down(&mut self){
 
-        let files = self.path.read_dir().unwrap();      //ノードの配下にあるディレクトリまたはファイルを取得
-        let mut childs : Vec<Box<Node>> = Vec::new();   //ノードの配下のノードを保管するためのベクタを初期化
+        if self.num_childs == 0{
+            return
+        }
+
+        //そのノードそのものが選択されている時 -> 子ノードの一番最初のノードを選択    
+        if self.selected{
+            if self.childs.len() == 0{
+                return
+            }
+            self.childs[0].selected = true;
+            self.selected = false;
+        }
+
+        //そのノードが選択されていない時 ->  子ノードの中から現在選択されているノードを取得し，
+        else{
+            if self.childs[self.selected_child].opened{
+                if self.childs[self.selected_child].selected_child == self.childs[self.selected_child].num_childs - 1{
+                    self.childs[self.selected_child].selected = false;
+                    self.selected_child += 1;
+                    self.childs[self.selected_child].selected = true;
+                }
+                self.childs[self.selected_child].select_down();
+            }
+            else{
+                if self.selected_child != self.num_childs - 1{
+                    self.childs[self.selected_child].selected = false;
+                    self.selected_child += 1;
+                    self.childs[self.selected_child].selected = true;
+                }
+            }
+
+        }
+    }
+
+    pub fn open_node(&mut self){
+        // execute!(stdout(), cursor::SavePosition, cursor::MoveTo(0, 20), Print(format!("node open {}", self.name)), cursor::RestorePosition);
+        if !self.selected{
+            for child in self.childs.iter_mut(){
+                if child.selected{
+                    child.open_node();
+                }
+            }
+            return
+        }
+
+        if self.opened{
+            self.close_node();
+            return
+        }
+
+        //ノードの配下にあるディレクトリまたはファイルを取得
+        let files = match self.path.read_dir(){
+            Ok(v) => {v}
+            Err(E) => {return}
+        };
+
+        self.opened = true;    //Node構造体のopen属性をtrueに
+        self.num_childs = self.path.read_dir().unwrap().count();
 
         //ノード配下のディレクトリまたはファイルを一つずつ見ていく
         for dir_entry in files{
@@ -67,7 +127,11 @@ impl Node{
                     name: _filename,
                     path: _path,
                     node_type: NodeType::Folder,
-                    childs: None,
+                    childs: Vec::new(),
+
+                    num_childs: 0,
+                    selected_child: 0,
+
                     opened: false,
                     selected: false,
                     ignore: false,
@@ -78,23 +142,26 @@ impl Node{
                     name: _filename,
                     path: _path,
                     node_type: NodeType::File,
-                    childs: None,
+                    childs: Vec::new(),
+
+                    num_childs: 0,
+                    selected_child: 0,
+
                     opened: false,
                     selected: false,
                     ignore: false,
                     }
             };
-            childs.push(Box::new(node));
+            self.childs.push(Box::new(node));
         }
-
-        self.childs = Some(childs);
 
         return
     }
 
     pub fn close_node(&mut self){
-        self.childs = None;
+        self.childs = Vec::new();
         self.opened = false;
+        self.num_childs = 0;
     }
 
     pub fn print_tree(&self, rank : usize){
@@ -124,12 +191,7 @@ impl Node{
         //ノードが開かれているときは子ノードを展開して再起的に出力
         //tree.childがNoneの時はreturnして再帰を終了
         if self.opened{
-            let childs: &Vec<Box<Node>>;
-            match &self.childs{
-                Some(_v) =>{childs = &_v}
-                None => return
-            }
-            for child in childs.iter(){
+            for child in self.childs.iter(){
                 child.print_tree(rank+1);
             }
         }

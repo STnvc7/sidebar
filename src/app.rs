@@ -15,13 +15,10 @@ pub fn run() -> io::Result<()>{
 
 	let root = env::current_dir().unwrap();
     let mut root_node = node::new_node(root).unwrap();
-    let selected_node = &mut root_node;
+    root_node.print_tree(0);
 
     terminal::enable_raw_mode()?;
     loop{
-        root_node.print_tree(0);
-
-
         // イベントの取得
         let event = read()?;
 
@@ -42,6 +39,8 @@ pub fn run() -> io::Result<()>{
                 execute!(stdout(), cursor::MoveToNextLine(1));
             }
         }
+
+        root_node.print_tree(0);
     }
 
     terminal::disable_raw_mode()?;
@@ -58,18 +57,13 @@ fn execute_command_from_key_event(key : KeyEvent, tree : &mut node::Node) -> Res
         //open or close node
         KeyCode::Enter   => {
             execute!(stdout(), terminal::Clear(terminal::ClearType::All));
-
-            if tree.is_opened() == false{
-                &tree.open_node();
-            }
-            else{
-                &tree.close_node();
-            }
+            &tree.open_node();
 
             Ok(1)
         }
 
         KeyCode::Down => {
+            &tree.select_down();
             Ok(1)
         }
 
