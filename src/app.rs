@@ -14,8 +14,8 @@ use crate::node;
 pub fn run() -> io::Result<()>{
 
 	let root = env::current_dir().unwrap();
-    let mut root_node = node::new_node(root).unwrap();
-    root_node.print_tree(0);
+    let mut tree = node::build_tree(&root).unwrap();
+    tree.print_tree(0);
 
     terminal::enable_raw_mode()?;
     loop{
@@ -23,7 +23,7 @@ pub fn run() -> io::Result<()>{
         let event = read()?;
 
         let result = match event {
-            Event::Key(e) => {execute_command_from_key_event(e, &mut root_node)},
+            Event::Key(e) => {execute_command_from_key_event(e, &mut tree)},
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
@@ -40,7 +40,7 @@ pub fn run() -> io::Result<()>{
             }
         }
 
-        root_node.print_tree(0);
+        tree.print_tree(0);
     }
 
     terminal::disable_raw_mode()?;
@@ -48,7 +48,7 @@ pub fn run() -> io::Result<()>{
     Ok(())
 }
 
-fn execute_command_from_key_event(key : KeyEvent, tree : &mut node::Node) -> Result<i32, String>{
+fn execute_command_from_key_event(key : KeyEvent, tree : &mut Box<node::Node>) -> Result<i32, String>{
 
     match key.code{
         //quit app
