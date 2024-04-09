@@ -82,27 +82,42 @@ impl Node{
         self.selected = value;
     }
 
-    //ゲッター
-    pub fn get_num_childs(&self) -> usize{
-        return self.num_childs
+    pub fn set_selected_all(&mut self, value: bool){
+        self.selected = value;
+
+        if self.num_childs == 0{
+            return
+        }
+
+        for child in self.childs.iter_mut(){
+            child.set_selected_all(value);
+        }
     }
 
-    pub fn is_opened(&self) -> bool{
-        return self.opened
+    pub fn set_opened_all(&mut self, value: bool){
+        self.opened = value;
+
+        if self.num_childs == 0{
+            return
+        }
+
+        for child in self.childs.iter_mut(){
+            child.set_opened_all(value);
+        }
     }
 
-    pub fn route_node(&mut self, mut route: VecDeque<usize>){
+    // pub fn route_node(&mut self, mut route: VecDeque<usize>){
 
-        let result = route.pop_front();
-        let idx = match result{
-            Some(v) => {v}
-            None => {return}
-        };
+    //     let result = route.pop_front();
+    //     let idx = match result{
+    //         Some(v) => {v}
+    //         None => {return}
+    //     };
         
-        self.childs[idx].opened = true;  
+    //     self.childs[idx].opened = true;  
 
-        self.childs[idx].route_node(route)
-    }
+    //     self.childs[idx].route_node(route)
+    // }
 
     // pub fn select_down(&mut self){
 
@@ -139,6 +154,14 @@ impl Node{
 
     //     }
     // }
+
+    pub fn get_route(&self, mut route: VecDeque<usize>, direction: &str){
+        
+    }
+
+    pub fn set_route(&mut self, route: VecDeque<usize>){
+
+    }
 
     pub fn close_node(&mut self){
         self.opened = false;
