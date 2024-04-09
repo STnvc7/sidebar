@@ -1,6 +1,9 @@
 use std::env;
 use std::io;
 use std::io::{stdout, Write};
+use std::path::PathBuf;
+use std::collections::VecDeque;
+
 use crossterm::{
     cursor, execute, ExecutableCommand, terminal,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
@@ -8,17 +11,39 @@ use crossterm::{
 };
 
 use crate::node;
+use crate::text_line;
 
-//無限ループをキー入力を待ち続ける
+//無限ループでキー入力を待ち続ける
 
 pub fn run() -> io::Result<()>{
 
-	let root = env::current_dir().unwrap();
-    let mut tree = node::build_tree(&root).unwrap();
-    tree.print_tree(0);
+    let root = env::current_dir().unwrap();
+
+    let mut tree = node::build_tree(&root);
+    let mut route : VecDeque<usize> = VecDeque::new();
+    let mut text_line = text_line::new();
+
+    // route.push_back(5);
+    // route.push_back(2);
+    tree.set_selected(true);
+    // tree.set_opened(true);
+    // tree.route_node(route.clone());
+    // text_buffer = tree.convert_to_string_vec(0);
+
+    // for text in text_buffer.iter(){
+    //     println!("{}", text);
+    // }
+
+    // return Ok(());
 
     terminal::enable_raw_mode()?;
     loop{
+        tree.route_node(route.clone());
+        let text = tree.convert_to_string_vec(0);
+        text_line.set_text(text);
+        text_line.display_text();
+
+        
         // イベントの取得
         let event = read()?;
 
@@ -39,8 +64,6 @@ pub fn run() -> io::Result<()>{
                 execute!(stdout(), cursor::MoveToNextLine(1));
             }
         }
-
-        tree.print_tree(0);
     }
 
     terminal::disable_raw_mode()?;
@@ -63,7 +86,7 @@ fn execute_command_from_key_event(key : KeyEvent, tree : &mut Box<node::Node>) -
         }
 
         KeyCode::Down => {
-            &tree.select_down();
+            //&tree.select_down();
             Ok(1)
         }
 
