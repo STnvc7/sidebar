@@ -79,9 +79,8 @@ fn execute_command_from_key_event(key : KeyEvent, tree : &mut Box<node::Node>) -
 
         //open or close node
         KeyCode::Enter   => {
-            execute!(stdout(), terminal::Clear(terminal::ClearType::All));
+            //execute!(stdout(), terminal::Clear(terminal::ClearType::All));
             &tree.open_node();
-
             Ok(1)
         }
 
