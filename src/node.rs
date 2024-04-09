@@ -155,12 +155,95 @@ impl Node{
     //     }
     // }
 
-    pub fn get_route(&self, mut route: VecDeque<usize>, direction: &str){
+    //上下ボタンが押されたときの遷移先を示す配列を返す関数 経路が変わる時はSome(), 変わらない時はNoneを返す
+    pub fn get_route(&self, mut route: VecDeque<usize>, direction: &str) -> Option<VecDeque<usize>>{
+
+        //返り値用の新しい経路
+        let mut new_route = VecDeque::new();
+
+        //ノードが開かれていない場合は何もしない
+        if !self.opened {
+            return None
+        }
         
+        match direction{
+
+            //下キーが押された時
+            "down" => {
+                // 元の経路がない時 -> 一番最初の子ノードを選択して返す． 子ノードがない場合は何も返さない
+                if route.len() == 0{
+                    if self.num_childs != 0{
+                        new_route.push_back(0);
+                        return Some(new_route)
+                    }
+                    return None
+                }
+
+                //  元の遷移経路の先頭から値をポップ
+                let mut poped_node_idx : usize = route.pop_front().unwrap();
+
+                // ポップしたインデックスの子ノードが開かれている時 -> 再起的に遷移先を取得
+                if self.childs[poped_node_idx].opened {
+                    let result = self.childs[poped_node_idx].get_route(route.clone(), direction);
+                    match result{
+                        //子ノードから遷移先を取得できた時 ->  新しい経路とくっ付ける
+                        Some(mut v) => {new_route.append(&mut v);}
+
+                        //子ノードから遷移先を取得できない(子ノードの最後まで達した時) -> 次の子ノードに移動
+                        None    => {
+                            if poped_node_idx == (self.num_childs - 1){ return None }
+                            else{ poped_node_idx += 1;}}
+                    }
+                    new_route.push_front(poped_node_idx);
+                    return Some(new_route)
+                }
+
+                //ポップしたインデックスの小ノードが開かれていない時 -> ポップしたノードの一つ下のノードに遷移
+                else{
+                    if poped_node_idx == (self.num_childs - 1){
+                        return None
+                    }
+                    else {
+                        new_route.push_back(poped_node_idx + 1);
+                        return Some(new_route);
+                    }
+                }
+            }
+
+            "up" => {
+                // 元の経路がない時 -> 一番最初の子ノードを選択して返す． 子ノードがない場合は何も返さない
+                if route.len() == 0{
+                    return None
+                }
+
+                let mut poped_node_idx = route.pop_back().unwrap();
+                if poped_node_idx == 0 {
+                    return Some(route)
+                }   
+                else {
+                    return None
+                }
+            }
+
+            _ => {return None}
+        }
     }
 
-    pub fn set_route(&mut self, route: VecDeque<usize>){
+    pub fn set_route(&mut self, mut route: VecDeque<usize>){
 
+        let result = route.pop_front();
+
+        match result {
+            Some(v) => {
+                if route.len() != 0 {
+                    self.childs[v].set_route(route.clone());
+                }
+                else{
+                    self.childs[v].selected = true;
+                }
+            }
+            None => {}
+        }
     }
 
     pub fn close_node(&mut self){
@@ -169,22 +252,13 @@ impl Node{
     }
 
     pub fn open_node(&mut self){
-    
-        if !self.selected{
-            for child in self.childs.iter_mut(){
-                if child.selected{
-                    child.open_node();
-                }
-            }
-            return
+
+        if self.selected {
+            if self.opened { self.close_node(); } else { self.opened = true; }
         }
         else{
-            if self.opened{
-                self.close_node();
-                return
-            }
-            else{
-                self.opened = true;
+            for child in self.childs.iter_mut(){
+                child.open_node();
             }
         }
     }

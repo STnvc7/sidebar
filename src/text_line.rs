@@ -33,7 +33,8 @@ impl TextLine{
 	}
 
 	pub fn display_text(&self){
-		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0));
+		//execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0));
+		execute!(stdout(), cursor::MoveTo(0,0));
 
 		for i in self.display_start..self.display_end{
 			print!("{}", self.text[i]);

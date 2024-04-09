@@ -44,10 +44,25 @@ pub fn run() -> io::Result<()>{
                     KeyCode::Enter      => { tree.open_node(); Ok(())}
 
                     //
-                    // KeyCode::Down       => {route = tree.get_route(route, "down");
-                    //                         tree.set_selected_all(false);
-                    //                         tree.set_route(route);
-                    //                         Ok(())}
+                    KeyCode::Down       => {
+                                            let result = tree.get_route(route.clone(), "down");
+                                            match result{
+                                                Some(v) => {route = v;
+                                                            tree.set_selected_all(false);
+                                                            tree.set_route(route.clone());}
+                                                None    => {}
+                                            }
+                                            Ok(())}
+
+                    KeyCode::Up       => {
+                                            let result = tree.get_route(route.clone(), "up");
+                                            match result{
+                                                Some(v) => {route = v;
+                                                            tree.set_selected_all(false);
+                                                            tree.set_route(route.clone());}
+                                                None    => {}
+                                            }
+                                            Ok(())}
 
                     KeyCode::Char(c)    => Err(String::from(format!("{} is invalid command", c))),
 
@@ -57,6 +72,10 @@ pub fn run() -> io::Result<()>{
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
+        let _text = tree.convert_to_string_vec(0);
+        text_line.set_text(_text);
+        text_line.display_text();
+
         match result{
             Ok(v) => {}
             Err(_e) => {
@@ -65,10 +84,6 @@ pub fn run() -> io::Result<()>{
                 execute!(stdout(), cursor::MoveToNextLine(1));
             }
         }
-
-        let _text = tree.convert_to_string_vec(0);
-        text_line.set_text(_text);
-        text_line.display_text();
     }
 
     terminal::disable_raw_mode()?;
