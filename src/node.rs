@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::io::stdout;
 use std::collections::VecDeque;
 
+use crate::color;
 
 #[derive(Debug, PartialEq)]
 enum NodeType{
@@ -106,55 +107,6 @@ impl Node{
         }
     }
 
-    // pub fn route_node(&mut self, mut route: VecDeque<usize>){
-
-    //     let result = route.pop_front();
-    //     let idx = match result{
-    //         Some(v) => {v}
-    //         None => {return}
-    //     };
-        
-    //     self.childs[idx].opened = true;  
-
-    //     self.childs[idx].route_node(route)
-    // }
-
-    // pub fn select_down(&mut self){
-
-    //     if self.num_childs == 0{
-    //         return
-    //     }
-
-    //     //そのノードそのものが選択されている時 -> 子ノードの一番最初のノードを選択    
-    //     if self.selected{
-    //         if self.childs.len() == 0{
-    //             return
-    //         }
-    //         self.childs[0].selected = true;
-    //         self.selected = false;
-    //     }
-
-    //     //そのノードが選択されていない時 ->  子ノードの中から現在選択されているノードを取得し，
-    //     else{
-    //         if self.childs[self.selected_child].opened{
-    //             if self.childs[self.selected_child].selected_child == self.childs[self.selected_child].num_childs - 1{
-    //                 self.childs[self.selected_child].selected = false;
-    //                 self.selected_child += 1;
-    //                 self.childs[self.selected_child].selected = true;
-    //             }
-    //             self.childs[self.selected_child].select_down();
-    //         }
-    //         else{
-    //             if self.selected_child != self.num_childs - 1{
-    //                 self.childs[self.selected_child].selected = false;
-    //                 self.selected_child += 1;
-    //                 self.childs[self.selected_child].selected = true;
-    //             }
-    //         }
-
-    //     }
-    // }
-
     //上下ボタンが押されたときの遷移先を示す配列を返す関数 経路が変わる時はSome(), 変わらない時はNoneを返す
     pub fn get_route(&self, mut route: VecDeque<usize>, direction: &str) -> Option<VecDeque<usize>>{
 
@@ -185,6 +137,7 @@ impl Node{
                 // ポップしたインデックスの子ノードが開かれている時 -> 再起的に遷移先を取得
                 if self.childs[poped_node_idx].opened {
                     let result = self.childs[poped_node_idx].get_route(route.clone(), direction);
+
                     match result{
                         //子ノードから遷移先を取得できた時 ->  新しい経路とくっ付ける
                         Some(mut v) => {new_route.append(&mut v);}
@@ -211,17 +164,20 @@ impl Node{
             }
 
             "up" => {
-                // 元の経路がない時 -> 一番最初の子ノードを選択して返す． 子ノードがない場合は何も返さない
                 if route.len() == 0{
                     return None
                 }
 
                 let mut poped_node_idx = route.pop_back().unwrap();
+
                 if poped_node_idx == 0 {
+                    if route.len() == 0 { return None }
                     return Some(route)
                 }   
                 else {
-                    return None
+                    route.push_back(poped_node_idx - 1);
+                    
+                    return Some(route)
                 }
             }
 
@@ -271,7 +227,7 @@ impl Node{
         let indent = String::from("   ");   //成形用のインデントの元　改装に応じてrepeatさせる
 
         //選択されているノードは緑で表示
-        let output_color = if self.selected {"\x1b[32m"} else {"\x1b[37m"};
+        let output_color = if self.selected {color::GREEN} else {color::WHITE};
 
         //ノードの種類ごとで出力形式を分ける
         let output_line = match &self.node_type{

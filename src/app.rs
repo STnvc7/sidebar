@@ -60,7 +60,8 @@ pub fn run() -> io::Result<()>{
                                                 Some(v) => {route = v;
                                                             tree.set_selected_all(false);
                                                             tree.set_route(route.clone());}
-                                                None    => {}
+                                                None    => {tree.set_selected_all(false);
+                                                            tree.set_selected(true);}
                                             }
                                             Ok(())}
 
@@ -77,7 +78,7 @@ pub fn run() -> io::Result<()>{
         text_line.display_text();
 
         match result{
-            Ok(v) => {}
+            Ok(v)   => {}
             Err(_e) => {
                 execute!(stdout(), terminal::Clear(terminal::ClearType::CurrentLine));
                 print!("{}{}", "\x1b[31m", _e);
@@ -90,25 +91,3 @@ pub fn run() -> io::Result<()>{
 
     Ok(())
 }
-
-// fn execute_command_from_key_event(key : KeyEvent, tree : &mut Box<node::Node>) -> Result<i32, String>{
-
-//     match key.code{
-//         //quit app
-//         KeyCode::Char('q') => Ok(0),
-
-//         //open or close node
-//         KeyCode::Enter   => {
-//             &tree.open_node();
-//             Ok(1)
-//         }
-
-//         KeyCode::Down => {
-//             &tree.set_route();
-//             Ok(1)
-//         }
-
-//         KeyCode::Char(c)   => Err(String::from(format!("{} is invalid command", c))),
-//         _ => Err(String::from("no covered key"))
-//     }
-// }
