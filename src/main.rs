@@ -1,6 +1,7 @@
 mod node;
 mod app;
 mod text_line;
+mod color;
 
 use std::io::stdout;
 
@@ -9,9 +10,7 @@ use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternate
 
 #[warn(unused_imports)]
 fn main(){
-    execute!(stdout(), cursor::Hide, Clear(ClearType::All));
-    //execute!(stdout(), EnterAlternateScreen);
+    execute!(stdout(), EnterAlternateScreen, cursor::Hide, Clear(ClearType::All));
     app::run();
-    //execute!(stdout(), LeaveAlternateScreen);
-    execute!(stdout(), cursor::Show);
+    execute!(stdout(), cursor::Show, LeaveAlternateScreen);
 }
