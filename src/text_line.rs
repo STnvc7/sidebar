@@ -2,9 +2,14 @@ use std::collections::VecDeque;
 use std::io::stdout;
 use crossterm::{cursor, execute, terminal};
 
+pub struct{
+	
+}
+
 pub struct TextLine{
 	text : VecDeque<String>,
 	console_msg : String, 
+	cursor_idx	  : usize, 
 	display_start : usize,
 	display_end   : usize,
 }
@@ -14,6 +19,7 @@ pub fn new() -> TextLine{
 	return TextLine{
 		text: VecDeque::new(),
 		console_msg : String::new(),
+		cursor_idx : 0, 
 		display_start: 0,
 		display_end : 0,
 	}
@@ -22,7 +28,7 @@ pub fn new() -> TextLine{
 impl TextLine{
 
 	pub fn set_text(&mut self, text: VecDeque<String>){
-		self.display_end = text.len();
+		self.display_end = text.len() - 1;
 		self.text = text;
 	}
 
@@ -38,12 +44,25 @@ impl TextLine{
 		self.display_end = value;
 	}
 
-	pub fn display_text(&self){
+	pub fn cursor_down(&mut self){
+		if self.cursor_idx == self.display_end{
+			return
+		}
+
+		self.cursor_idx += 1;
+	}
+
+	pub fn get_cursor_route(&self){
+
+	}
+
+	pub fn display(&self){
 		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0));
 		execute!(stdout(), cursor::MoveTo(0,0));
 
 		for i in self.display_start..self.display_end{
-			print!("{}", self.text[i]);
+			let output_color = if i == self.cursor_idx { color::GREEN } else { color::WHITE };
+			print!("{}{}", output_color, self.text[i]);
 			execute!(stdout(), cursor::MoveToNextLine(1));
 		}
 	}
