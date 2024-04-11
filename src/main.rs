@@ -3,14 +3,20 @@ mod app;
 mod text_line;
 mod color;
 
-use std::io::stdout;
+use std::io::{stdout, Result};
 
-use crossterm::{cursor, execute,};
-use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm;
+use crossterm::{cursor, execute};
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 
 #[warn(unused_imports)]
-fn main(){
-    execute!(stdout(), EnterAlternateScreen, cursor::Hide, Clear(ClearType::All));
-    app::run();
-    execute!(stdout(), cursor::Show, LeaveAlternateScreen);
+fn main() -> Result<()>{
+
+    execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
+
+    app::run()?;
+
+    execute!(stdout(), cursor::Show, LeaveAlternateScreen)?;
+
+    Ok(())
 }
