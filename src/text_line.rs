@@ -96,7 +96,7 @@ impl TextLine{
 	//-----------------------------------------------------------------------------------------
 	pub fn display(&self) -> Result<()>{
 		
-		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), Print(format!("{}", color::WHITE)))?;
+		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), Print(format!("{}", color::BOLD)))?;
 
 		let start = self.display_start;
 		let end   = if self.text_length < self.terminal_size { self. text_length }
