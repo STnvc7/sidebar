@@ -2,21 +2,34 @@ use std::collections::VecDeque;
 use std::io::{stdout, Result};
 use crossterm::{cursor, execute, terminal};
 use crossterm::style::Print;
+use std::path::PathBuf;
+
 
 use crate::color;
 use crate::node::NodeType;
 
 pub struct TextElement{
 	pub text : String,
+	pub path : PathBuf,
 	pub node_type : NodeType, 
 	pub rank : usize,
 	pub route : VecDeque<usize>,
 }
 
+pub enum ConsoleMessageStatus{
+	Error,
+	Normal,
+}
+
+struct ConsoleMessage{
+	message : String,
+	status  : ConsoleMessageStatus,
+}
+
 pub struct TextLine{
 	text : VecDeque<TextElement>,
 	text_length : usize,
-	console_msg : String, 
+	console_msg : ConsoleMessage, 
 
 	cursor_idx	  : usize, 
 
@@ -29,7 +42,7 @@ pub fn new() -> TextLine{
 	return TextLine{
 		text: VecDeque::new(),
 		text_length : 0,
-		console_msg : String::new(),
+		console_msg : ConsoleMessage{message : String::new(), status: ConsoleMessageStatus::Error},
 		cursor_idx : 0, 
 		display_start: 0,
 		terminal_size : bottom as usize,
@@ -38,37 +51,34 @@ pub fn new() -> TextLine{
 
 impl TextLine{
 
+	//-----------------------------------------------------------------------------------------
 	pub fn set_text(&mut self, text: VecDeque<TextElement>){
 		self.text_length = text.len();
 		self.text = text;
 	}
 
-	pub fn set_console_msg(&mut self, console_msg: String){
-		self.console_msg = console_msg;
+	pub fn set_console_msg(&mut self, console_msg: String, status : ConsoleMessageStatus){
+		self.console_msg = ConsoleMessage{ message : console_msg, status : status};
 	}
 
-	pub fn set_display_start(&mut self, value: usize){
-		self.display_start = value;
-	}
-
-	pub fn set_terminal_size(&mut self, value: usize){
-		self.terminal_size = value;
-	}
-
+	//-----------------------------------------------------------------------------------------
 	pub fn cursor_down(&mut self){
 		if self.cursor_idx == self.text_length - 1{
 			return
 		}
-
 		self.cursor_idx += 1;
 	}
-	
+
 	pub fn cursor_up(&mut self){
 		if self.cursor_idx == 0{
 			return
 		}
-
 		self.cursor_idx -= 1;
+	}
+	//-----------------------------------------------------------------------------------------
+	pub fn get_cursor_path(&self) -> PathBuf {
+		let _path = self.text[self.cursor_idx].path.clone();
+		return _path
 	}
 
 	pub fn get_cursor_route(&self) -> VecDeque<usize>{
@@ -77,9 +87,16 @@ impl TextLine{
 		return route
 	}
 
+	pub fn get_cursor_node_type(&self) -> NodeType{
+		match self.text[self.cursor_idx].node_type{
+			NodeType::Folder => {NodeType::Folder}
+			NodeType::File   => {NodeType::File}
+		}
+	}
+	//-----------------------------------------------------------------------------------------
 	pub fn display(&self) -> Result<()>{
-		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0));
-		print!("{}", color::WHITE);
+		
+		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), Print(format!("{}", color::WHITE)))?;
 
 		let start = self.display_start;
 		let end   = if self.text_length < self.terminal_size { self. text_length }
@@ -94,14 +111,17 @@ impl TextLine{
 			let _indent = String::from("  ").repeat(_rank);
 
 			match self.text[i].node_type{
-				NodeType::Folder => { execute!(stdout(), Print(format!("{}{}>{}", _indent, _color, _text)));}
-				NodeType::File   => { execute!(stdout(), Print(format!("{}{}{}", _indent, _color, _text)));}
+				NodeType::Folder => { execute!(stdout(), Print(format!("{}{}>{}", _indent, _color, _text)))?;}
+				NodeType::File   => { execute!(stdout(), Print(format!("{}{}{}", _indent, _color, _text)))?;}
 			}
 			execute!(stdout(), cursor::MoveToNextLine(1))?;
 		}
 
-		execute!(stdout(), cursor::MoveTo(0, self.terminal_size as u16), 
-				 Print(format!("{}{}", color::RED, self.console_msg)))?;
+		let console_msg = match self.console_msg.status{
+			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
+			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
+		};
+		execute!(stdout(), cursor::MoveTo(0, self.terminal_size as u16), Print(console_msg))?;
 
 		Ok(())
 	}

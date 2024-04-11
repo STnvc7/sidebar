@@ -1,8 +1,6 @@
 use std::path::PathBuf;
-use std::io::stdout;
 use std::collections::VecDeque;
 
-use crate::color;
 use crate::text_line::TextElement;
 
 #[derive(Debug, PartialEq)]
@@ -22,10 +20,9 @@ pub struct Node{
     num_childs : usize,
 
     opened  : bool,
-    selected: bool,
     ignore  : bool,
 }
-//----------------------------------
+//-----------------------------------------------------------------------------------------
 
 //最初の木を構築する関数
 pub fn build_tree(target: &PathBuf) -> Box<Node>{
@@ -52,7 +49,6 @@ pub fn build_tree(target: &PathBuf) -> Box<Node>{
                             num_childs: 0,
 
                             opened: false,
-                            selected: false,
                             ignore: false,})};
         _childs.push(_child);
     }
@@ -66,38 +62,22 @@ pub fn build_tree(target: &PathBuf) -> Box<Node>{
                     num_childs: num_childs,
 
                     opened: false,
-                    selected: false,
                     ignore: false,
     });
     return new_node
 }
+//-----------------------------------------------------------------------------------------
 
 //ノードのメソッド
 impl Node{
 
     //セッター
-    pub fn set_opened(&mut self, value : bool){
+    fn set_opened(&mut self, value : bool){
         self.opened = value;
-    }
-
-    pub fn set_selected(&mut self, value: bool){
-        self.selected = value;
-    }
-
-    pub fn set_selected_all(&mut self, value: bool){
-        self.selected = value;
-
-        if self.num_childs == 0{
-            return
-        }
-
-        for child in self.childs.iter_mut(){
-            child.set_selected_all(value);
-        }
     }
 
     pub fn set_opened_all(&mut self, value: bool){
-        self.opened = value;
+        self.set_opened(value);
 
         if self.num_childs == 0{
             return
@@ -107,7 +87,7 @@ impl Node{
             child.set_opened_all(value);
         }
     }
-
+    //-----------------------------------------------------------------------------------------
     pub fn open_node(&mut self, mut route: VecDeque<usize>){
 
         let result = route.pop_front();
@@ -115,14 +95,20 @@ impl Node{
 
         match result{
             Some(v) => { poped_node_idx = v;}
-            None    => { if self.opened == false { self.opened = true; }
-                         else { self.set_opened_all(false); }
-                         return }
+
+            //ルートのノードの場合
+            None    => {if self.opened == false {
+                            self.set_opened(true);
+                        }
+                        else {
+                            self.set_opened_all(false);
+                        }
+                        return }
         }
 
         if route.len() == 0{
             if self.childs[poped_node_idx].opened == false{
-                self.childs[poped_node_idx].opened = true;
+                self.childs[poped_node_idx].set_opened(true);
             }
             else {
                 self.childs[poped_node_idx].set_opened_all(false);
@@ -134,6 +120,7 @@ impl Node{
         return
     }
 
+    //-----------------------------------------------------------------------------------------
     //木の出力用のString型のVecDequeを返す
     pub fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
@@ -151,11 +138,12 @@ impl Node{
         }
 
         //このノードの情報
-        let name        = self.name.to_string();
+        let _name        = self.name.to_string();
+        let _path        = self.path.clone();
         let output_elem =  match self.node_type{
-            NodeType::Folder => {TextElement{ text : name, node_type : NodeType::Folder,
+            NodeType::Folder => {TextElement{ text : _name, node_type : NodeType::Folder, path : _path,
                                               rank : rank, route : route}}
-            NodeType::File   => {TextElement{ text : name, node_type : NodeType::File,
+            NodeType::File   => {TextElement{ text : _name, node_type : NodeType::File, path : _path,
                                               rank : rank, route : route}}
         };
         _output.push_front(output_elem);
