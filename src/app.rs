@@ -21,11 +21,10 @@ pub fn run() -> io::Result<()>{
     let root = env::current_dir().unwrap();
 
     let mut tree = node::build_tree(&root);
-    let mut route : VecDeque<usize> = VecDeque::new();
     let mut text_line = text_line::new();
 
     tree.set_selected(true);
-    let _text = tree.convert_to_string_vec(0, route.clone());
+    let _text = tree.format_for_textline(0, VecDeque::new());
     text_line.set_text(_text);
     text_line.display();
 
@@ -43,7 +42,7 @@ pub fn run() -> io::Result<()>{
 
                     //open or close node
                     KeyCode::Enter      => {
-                        route = text_line.get_cursor_route();
+                        let route = text_line.get_cursor_route();
                         tree.open_node(route.clone());
                         Ok(())
                     }
@@ -51,7 +50,7 @@ pub fn run() -> io::Result<()>{
                     //
                     KeyCode::Down       => { text_line.cursor_down(); Ok(())}
 
-                    // KeyCode::Up       => {}
+                    KeyCode::Up         => { text_line.cursor_up(); Ok(()) }
 
                     KeyCode::Char(c)    => Err(String::from(format!("{} is invalid command", c))),
 
@@ -61,7 +60,7 @@ pub fn run() -> io::Result<()>{
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
-        let _text = tree.convert_to_string_vec(0, route.clone());
+        let _text = tree.format_for_textline(0, VecDeque::new());
         let _console_msg = match result{
             Ok(v)   => {String::new()}
             Err(e) => {e}

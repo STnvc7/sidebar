@@ -56,12 +56,13 @@ impl TextLine{
 	}
 
 	pub fn cursor_down(&mut self){
-		if self.cursor_idx == self.text_length{
+		if self.cursor_idx == self.text_length - 1{
 			return
 		}
 
 		self.cursor_idx += 1;
 	}
+	
 	pub fn cursor_up(&mut self){
 		if self.cursor_idx == 0{
 			return
@@ -90,7 +91,7 @@ impl TextLine{
 			let _rank = self.text[i].rank;
 
 			let _color = if i == self.cursor_idx { color::GREEN } else { color::WHITE };
-			let _indent = String::from("   ").repeat(_rank);
+			let _indent = String::from("  ").repeat(_rank);
 
 			match self.text[i].node_type{
 				NodeType::Folder => { execute!(stdout(), Print(format!("{}{}>{}", _indent, _color, _text)));}
@@ -98,9 +99,7 @@ impl TextLine{
 			}
 			execute!(stdout(), cursor::MoveToNextLine(1))?;
 		}
-		for r in self.text[self.cursor_idx].route.iter(){
-			print!("{}", r);
-		}
+
 		execute!(stdout(), cursor::MoveTo(0, self.terminal_size as u16), 
 				 Print(format!("{}{}", color::RED, self.console_msg)))?;
 

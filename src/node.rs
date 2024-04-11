@@ -116,7 +116,7 @@ impl Node{
         match result{
             Some(v) => { poped_node_idx = v;}
             None    => { if self.opened == false { self.opened = true; }
-                         else { self.opened = false; }
+                         else { self.set_opened_all(false); }
                          return }
         }
 
@@ -125,7 +125,7 @@ impl Node{
                 self.childs[poped_node_idx].opened = true;
             }
             else {
-                self.childs[poped_node_idx].opened = false;
+                self.childs[poped_node_idx].set_opened_all(false);
             }
             return
         }
@@ -135,7 +135,7 @@ impl Node{
     }
 
     //木の出力用のString型のVecDequeを返す
-    pub fn convert_to_string_vec(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
+    pub fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
         let mut _output = VecDeque::new();
 
@@ -144,7 +144,7 @@ impl Node{
 
                 let mut new_route = route.clone();
                 new_route.push_back(i as usize);
-                let mut _child_elem = child.convert_to_string_vec(rank+1, new_route);
+                let mut _child_elem = child.format_for_textline(rank+1, new_route);
 
                 _output.append(&mut _child_elem);
             }
