@@ -5,12 +5,13 @@ mod color;
 
 use std::io::stdout;
 
-use crossterm::{cursor, execute,};
+use crossterm;
+use crossterm::{cursor, execute,terminal};
 use crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 
 #[warn(unused_imports)]
 fn main(){
-    execute!(stdout(), EnterAlternateScreen, cursor::Hide, Clear(ClearType::All));
-    app::run();
+    execute!(stdout(), EnterAlternateScreen, cursor::Hide);
+    let _ = app::run();
     execute!(stdout(), cursor::Show, LeaveAlternateScreen);
 }

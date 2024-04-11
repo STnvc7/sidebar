@@ -12,6 +12,7 @@ use crossterm::{
 
 use crate::node;
 use crate::text_line;
+use crate::text_line::TextElement;
 
 //無限ループでキー入力を待ち続ける
 
@@ -24,8 +25,9 @@ pub fn run() -> io::Result<()>{
     let mut text_line = text_line::new();
 
     tree.set_selected(true);
-    text_line.set_text(tree.convert_to_string_vec(0));
-    text_line.display_text();
+    let _text = tree.convert_to_string_vec(0, route.clone());
+    text_line.set_text(_text);
+    text_line.display();
 
     terminal::enable_raw_mode()?;
     loop{
@@ -33,7 +35,6 @@ pub fn run() -> io::Result<()>{
         let event = read()?;
 
         let result = match event {
-
             //キーイベント
             Event::Key(e) => {
                 match e.code{
@@ -41,7 +42,11 @@ pub fn run() -> io::Result<()>{
                     KeyCode::Char('q')  => { break;}
 
                     //open or close node
-                    KeyCode::Enter      => { tree.open_node(); Ok(())}
+                    KeyCode::Enter      => {
+                        route = text_line.get_cursor_route();
+                        tree.open_node(route.clone());
+                        Ok(())
+                    }
 
                     //
                     KeyCode::Down       => { text_line.cursor_down(); Ok(())}
@@ -56,15 +61,15 @@ pub fn run() -> io::Result<()>{
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
-        let _text = tree.convert_to_string_vec(0);
+        let _text = tree.convert_to_string_vec(0, route.clone());
         let _console_msg = match result{
             Ok(v)   => {String::new()}
-            Err(_e) => {e}
-        }
+            Err(e) => {e}
+        };
 
         text_line.set_text(_text);
         text_line.set_console_msg(_console_msg);
-        text_line.display();
+        text_line.display()?;
     }
 
     terminal::disable_raw_mode()?;

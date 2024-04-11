@@ -3,9 +3,10 @@ use std::io::stdout;
 use std::collections::VecDeque;
 
 use crate::color;
+use crate::text_line::TextElement;
 
 #[derive(Debug, PartialEq)]
-enum NodeType{
+pub enum NodeType{
     Folder,
     File,
 }
@@ -107,13 +108,16 @@ impl Node{
         }
     }
 
-    pub fn open_node(&mut self, route: VecDeque<usize>){
+    pub fn open_node(&mut self, mut route: VecDeque<usize>){
 
         let result = route.pop_front();
         let poped_node_idx : usize;
+
         match result{
             Some(v) => { poped_node_idx = v;}
-            None    => { return }
+            None    => { if self.opened == false { self.opened = true; }
+                         else { self.opened = false; }
+                         return }
         }
 
         if route.len() == 0{
@@ -131,29 +135,30 @@ impl Node{
     }
 
     //木の出力用のString型のVecDequeを返す
-    pub fn convert_to_string_vec(&self, rank : usize) -> VecDeque<String>{
-
-        //このノードの情報を出力
-        let name = &self.name;               //ファイル/フォルダ名
-        let indent = String::from("   ");   //成形用のインデントの元　改装に応じてrepeatさせる
-
-        //ノードの種類ごとで出力形式を分ける
-        let output_line = match &self.node_type{
-            NodeType::Folder => format!("{}> {}",indent.repeat(rank), name),    //フォルダの時は >マークを先頭につける
-            NodeType::File => format!("{}{}",indent.repeat(rank), name),
-            };
+    pub fn convert_to_string_vec(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
         let mut _output = VecDeque::new();
+
         if self.opened{
-            for child in self.childs.iter(){
-                let mut _line = child.convert_to_string_vec(rank+1);
-                _output.append(&mut _line);
+            for (i, child) in self.childs.iter().enumerate(){
+
+                let mut new_route = route.clone();
+                new_route.push_back(i as usize);
+                let mut _child_elem = child.convert_to_string_vec(rank+1, new_route);
+
+                _output.append(&mut _child_elem);
             }
-            _output.push_front(output_line);
         }
-        else{
-            _output.push_back(output_line);
-        }
+
+        //このノードの情報
+        let name        = self.name.to_string();
+        let output_elem =  match self.node_type{
+            NodeType::Folder => {TextElement{ text : name, node_type : NodeType::Folder,
+                                              rank : rank, route : route}}
+            NodeType::File   => {TextElement{ text : name, node_type : NodeType::File,
+                                              rank : rank, route : route}}
+        };
+        _output.push_front(output_elem);
 
         return _output
     }
