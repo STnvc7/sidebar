@@ -76,7 +76,7 @@ impl Node{
         self.opened = value;
     }
 
-    pub fn set_opened_all(&mut self, value: bool){
+    fn set_opened_all(&mut self, value: bool){
         self.set_opened(value);
 
         if self.num_childs == 0{
@@ -122,7 +122,11 @@ impl Node{
 
     //-----------------------------------------------------------------------------------------
     //木の出力用のString型のVecDequeを返す
-    pub fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
+    pub fn format(&self) -> VecDeque<TextElement> {
+        let texts = self.format_for_textline(0, VecDeque::new());
+        return texts
+    }
+    fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
         let mut _output = VecDeque::new();
 

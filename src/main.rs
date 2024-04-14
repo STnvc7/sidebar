@@ -4,6 +4,7 @@ mod text_line;
 mod color;
 
 use std::io::{stdout, Result};
+use std::env;
 
 use crossterm;
 use crossterm::{cursor, execute};
@@ -13,9 +14,7 @@ use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 fn main() -> Result<()>{
 
     execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
-
-    app::run()?;
-
+    let _ = app::run();
     execute!(stdout(), cursor::Show, LeaveAlternateScreen)?;
 
     Ok(())

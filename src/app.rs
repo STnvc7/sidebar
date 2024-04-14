@@ -1,6 +1,5 @@
 use std::env;
 use std::io;
-use std::collections::VecDeque;
 use std::process::Command;
 
 use crossterm::terminal;
@@ -11,8 +10,17 @@ use crate::node::NodeType;
 use crate::text_line::ConsoleMessageStatus;
 use crate::text_line;
 
-//無限ループでキー入力を待ち続ける
+enum Commands{
+    Quit,
+    Up,
+    Down,
+    ShowPath,
+    OpenFile,
+    OpenFolder,
+    Resize,
+}
 
+//無限ループでキー入力を待ち続ける
 pub fn run() -> io::Result<()>{
 
     let root = env::current_dir().unwrap();
@@ -20,7 +28,7 @@ pub fn run() -> io::Result<()>{
     let mut tree = node::build_tree(&root);
     let mut text_line = text_line::new();
 
-    let _text = tree.format_for_textline(0, VecDeque::new());
+    let _text = tree.format();
     text_line.set_text(_text);
     text_line.display()?;
 
@@ -29,50 +37,53 @@ pub fn run() -> io::Result<()>{
         // イベントの取得
         let event = read()?;
 
-        let result = match event {
+        let command = match event {
             //キーイベント
             Event::Key(e) => {
                 match e.code{
                     //quit app
-                    KeyCode::Char('q')  => { break; }
-                    KeyCode::Char('p')  => { let _path = text_line.get_cursor_path();
-                                             Ok(_path.to_string_lossy().into_owned())}
-
-                    //open or close node
+                    KeyCode::Char('q')  =>  Ok(Commands::Quit),
+                    KeyCode::Char('p')  =>  Ok(Commands::ShowPath),
                     KeyCode::Enter      => {
                         match text_line.get_cursor_node_type(){
-
-                            //フォルダの時はフォルダを開く又は閉じる
-                            NodeType::Folder => { let route = text_line.get_cursor_route();
-                                                  tree.open_node(route.clone());
-                                                }
-                            //ファイルの時はファイルを開く
-                            NodeType::File   => { let _path = text_line.get_cursor_path();
-                                                  Command::new("subl").arg(_path).spawn(); //TODO!!!!!!!!!!!!!!!
-                                                }
+                            NodeType::Folder => Ok(Commands::OpenFolder),
+                            NodeType::File   => Ok(Commands::OpenFile),
                         }
-                        Ok(String::new())
                     }
-
-                    KeyCode::Down       => { text_line.cursor_down(); Ok(String::new()) }
-                    KeyCode::Up         => { text_line.cursor_up();   Ok(String::new()) }
+                    KeyCode::Down       =>  Ok(Commands::Down),
+                    KeyCode::Up         =>  Ok(Commands::Up),
 
                     KeyCode::Char(c)    => Err(String::from(format!("{} is invalid command", c))),
-
-                    _ => Err(String::from("no covered key"))
+                    _ => Err(String::from("no covered key")),
                 }        
-            },
+            }
+            Event::Resize(_, _) => Ok(Commands::Resize),
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
-        match result{
-            Ok(s)   => {text_line.set_console_msg(s, ConsoleMessageStatus::Normal);}
+        match command{
+            Ok(Commands::Quit)       => {break;}
+
+            Ok(Commands::Up)         => {text_line.cursor_up();}
+
+            Ok(Commands::Down)       => {text_line.cursor_down();}
+
+            Ok(Commands::ShowPath)   => {let _path = text_line.get_cursor_path().to_string_lossy().into_owned();
+                                         text_line.set_console_msg(_path, ConsoleMessageStatus::Normal);}
+
+            Ok(Commands::OpenFolder) => {let route = text_line.get_cursor_route();
+                                         tree.open_node(route.clone());}
+
+            Ok(Commands::OpenFile)   => {let _path = text_line.get_cursor_path();
+                                         let _ = Command::new("subl").arg(_path).spawn();} //TODO!!!!!!!!!!!!!!!
+
+            Ok(Commands::Resize)     => {text_line.set_terminal_size();}
+
             Err(s) =>  {text_line.set_console_msg(s, ConsoleMessageStatus::Error);}
         };
 
-        let _text = tree.format_for_textline(0, VecDeque::new());
+        let _text = tree.format();
         text_line.set_text(_text);
-        
         text_line.display()?;
     }
 
