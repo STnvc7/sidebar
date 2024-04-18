@@ -75,7 +75,7 @@ pub fn run() -> io::Result<()>{
                                          tree.open_node(route.clone());}
 
             Ok(Commands::OpenFile)   => {let _path = text_line.get_cursor_path();
-                                         let _ = Command::new("subl").arg(_path).spawn();} //TODO!!!!!!!!!!!!!!!
+                                         let _ = Command::new("rsubl").arg(_path).spawn();} //TODO!!!!!!!!!!!!!!!
 
             Ok(Commands::Resize)     => {text_line.set_terminal_size();}
 

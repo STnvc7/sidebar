@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
-use std::io::{stdout, Result};
-use crossterm::{cursor, execute, terminal};
+use std::io::{stdout, Result, Write};
+
+use crossterm::{cursor, execute, queue, terminal};
+use crossterm::terminal::{Clear, ClearType};
+use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
 use std::path::PathBuf;
 
@@ -140,32 +143,33 @@ impl TextLine{
 	pub fn display(&self) -> Result<()>{
 		
 		let separator = String::from("-").repeat(self.terminal_width - 1);
-		execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), Print(format!("{}{}",color::WHITE, color::BOLD)))?;
-		execute!(stdout(), Print(&separator), cursor::MoveToNextLine(1))?;
+
+		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)))?;
+		queue!(stdout(), Print(&separator), MoveToNextLine(1))?;
 
 		for i in self.display_start..=self.display_end {
 
 			let _text = &self.text[i].text;
 			let _rank = self.text[i].rank;
 
-			let _color = if i == self.cursor_idx { color::GREEN } else { color::WHITE };
+			let _color = if i == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) } else { color::WHITE.to_string() };
 			let _indent = String::from("  ").repeat(_rank);
 
 			match self.text[i].node_type{
-				NodeType::Folder => { execute!(stdout(), Print(format!("{}{}❯ {}", _indent, _color, _text)))?;}
-				NodeType::File   => { execute!(stdout(), Print(format!("{}{}{}", _indent, _color, _text)))?;}
+				NodeType::Folder => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}❯ {}{}", color::RESET,_indent, _color, _text, color::RESET)))?;}
+				NodeType::File   => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}{}{}", color::RESET, _indent, _color, _text, color::RESET)))?;}
 			}
-			execute!(stdout(), cursor::MoveToNextLine(1))?;
+			queue!(stdout(), cursor::MoveToNextLine(1))?;
 		}
 
-		execute!(stdout(), cursor::MoveTo(0, (self.terminal_height as u16) - 2), Print(format!("{}{}",color::WHITE, &separator)), cursor::MoveToNextLine(1))?;
+		queue!(stdout(), MoveTo(0, (self.terminal_height as u16) - 2), Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
 			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
 		};
-		execute!(stdout(), Print(console_msg))?;
-		//execute!(stdout(), cursor::MoveTo(20,0), Print(format!("h:{} l:{} c: {}, s:{}, e:{}", self.terminal_height, self.text_length, self.cursor_idx, self.display_start, self.display_end)))?;
-
+		queue!(stdout(), Clear(ClearType::CurrentLine), Print(console_msg))?;
+		stdout().flush()?;
+		
 		Ok(())
 	}
 }
