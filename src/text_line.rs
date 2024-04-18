@@ -159,10 +159,10 @@ impl TextLine{
 				NodeType::Folder => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}❯ {}{}", color::RESET,_indent, _color, _text, color::RESET)))?;}
 				NodeType::File   => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}{}{}", color::RESET, _indent, _color, _text, color::RESET)))?;}
 			}
-			queue!(stdout(), cursor::MoveToNextLine(1))?;
+			queue!(stdout(), MoveToNextLine(1))?;
 		}
 
-		queue!(stdout(), MoveTo(0, (self.terminal_height as u16) - 2), Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
+		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height as u16) - 2), Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
 			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
