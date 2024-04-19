@@ -13,6 +13,7 @@ use crate::node::NodeType;
 
 const CONSOLE_MSG_NUM_LINE : usize = 3;
 const SCROLL_MARGIN : usize = 2;
+const RIGHT_MARGIN : usize = 2;
 
 pub struct TextElement{
 	pub text : String,
@@ -155,12 +156,41 @@ impl TextLine{
 			let _color = if i == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) } else { color::WHITE.to_string() };
 			let _indent = String::from("  ").repeat(_rank);
 
+			if (_text.len() + _indent.len()) < (self.terminal_width - RIGHT_MARGIN){
+				queue!(stdout(), Clear(ClearType::CurrentLine))?;
+			}
+			else{
+				queue!(stdout(), cursor::SavePosition)?;
+				for j in 0..(_text.len() / (self.terminal_width - _indent.len() - RIGHT_MARGIN)){
+					queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1))?;
+				}
+				queue!(stdout(), cursor::RestorePosition)?;
+			}
+
+			let _line = if (_text.len() + _indent.len()) < (self.terminal_width - RIGHT_MARGIN){
+							_text.clone()
+						}
+						
+						//出力が二行以上になる場合
+						else{
+							let mut out = String::new();
+							let text_width = self.terminal_width - _indent.len() - RIGHT_MARGIN;
+							for (j, c) in _text.chars().enumerate(){
+								if (j % text_width == 0) & (j != 0) {
+									out.push_str(&format!("{}{}{}{}", color::RESET, String::from(" ").repeat(RIGHT_MARGIN), _indent, _color));
+								}
+								out.push(c);
+							}
+							out
+						};
+			//----------------------------------------------------
 			match self.text[i].node_type{
-				NodeType::Folder => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}❯ {}{}", color::RESET,_indent, _color, _text, color::RESET)))?;}
-				NodeType::File   => { queue!(stdout(), Clear(ClearType::CurrentLine), Print(format!("{}{}{}{}{}", color::RESET, _indent, _color, _text, color::RESET)))?;}
+					NodeType::Folder => { queue!(stdout(), Print(format!("{}{}{}❯ {}{}", color::RESET,_indent, _color, _line, color::RESET)))?;}
+			 		NodeType::File   => { queue!(stdout(), Print(format!("{}{}{}{}{}", color::RESET, _indent, _color, _line, color::RESET)))?;}
 			}
 			queue!(stdout(), MoveToNextLine(1))?;
 		}
+		//---------------------------------------------------------------------------------------------------------------------------
 
 		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height as u16) - 2), Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
 		let console_msg = match self.console_msg.status{
