@@ -5,8 +5,6 @@ use crossterm::{cursor, queue, terminal};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
-use std::path::PathBuf;
-
 
 use crate::color;
 use crate::node::NodeType;
@@ -195,7 +193,7 @@ impl TextLine{
 					}
 				}
 				NodeType::File => {
-					for (i, b) in buf.iter().enumerate(){
+					for b in buf.iter(){
 						_line.push_str(&format!("{}{}{}{}{}", &indent, &color, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
 					}		
 				}
@@ -228,7 +226,7 @@ impl TextLine{
 
 			//出力の行数分だけターミナルを掃除
 			queue!(stdout(), cursor::SavePosition)?;
-			for j in 0.._num_lines{
+			for _ in 0.._num_lines{
 				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1))?;
 			}
 			queue!(stdout(), cursor::RestorePosition)?;

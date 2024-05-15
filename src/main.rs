@@ -4,7 +4,6 @@ mod text_line;
 mod color;
 
 use std::io::{stdout, Result};
-use std::env;
 
 use crossterm;
 use crossterm::{cursor, execute};

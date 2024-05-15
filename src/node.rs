@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::collections::VecDeque;
+use std::cmp::Ordering;
 
 use crate::text_line::{TextElement, get_num_lines};
 
@@ -28,9 +29,8 @@ pub struct Node{
 pub fn build_tree(target: &PathBuf) -> Box<Node>{
 
     //ノードの配下にあるディレクトリまたはファイルを取得
-    let files = target.read_dir().unwrap();
-    let num_childs = target.read_dir().unwrap().count();
     let _childs = get_childs(target);
+    let num_childs = target.read_dir().unwrap().count();
 
     let new_node = Box::new(Node{
                     name: target.file_name().unwrap().to_string_lossy().into_owned(),
@@ -46,7 +46,7 @@ pub fn build_tree(target: &PathBuf) -> Box<Node>{
 
 fn get_childs(target : &PathBuf) -> Vec<Box<Node>>{
     let files = target.read_dir().unwrap();
-    let mut _childs = Vec::new();
+    let mut childs = Vec::new();
 
     for dir_entry in files{
 
@@ -61,10 +61,24 @@ fn get_childs(target : &PathBuf) -> Vec<Box<Node>>{
                                 num_childs: 0,
                                 opened: false,
                                 ignore: false,});
-        _childs.push(_child);
+        childs.push(_child);
     }
 
-    return _childs
+    //ディレクトリ->ファイルの順にソート その後名前順でソート
+    childs.sort_by(|a, b|{
+        match a.node_type{
+            NodeType::Folder => {
+                match b.node_type{
+                    NodeType::Folder => Ordering::Equal,
+                    NodeType::File => Ordering::Less}}
+            NodeType::File => {
+                match b.node_type{
+                    NodeType::Folder => Ordering::Greater,
+                    NodeType::File => Ordering::Equal}}
+        }.then(a.name.cmp(&b.name))
+    });
+
+    return childs
 }
 //-----------------------------------------------------------------------------------------
 
@@ -105,11 +119,6 @@ impl Node{
 
         return _path
 
-    }
-
-    pub fn reset_node(&mut self){
-        self.set_childs(Vec::new());
-        return
     }
 
     //-----------------------------------------------------------------------------------------
