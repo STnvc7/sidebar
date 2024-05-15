@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::collections::VecDeque;
 
-use crate::text_line::TextElement;
+use crate::text_line::{TextElement, get_num_lines};
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType{
@@ -29,42 +29,42 @@ pub fn build_tree(target: &PathBuf) -> Box<Node>{
 
     //ノードの配下にあるディレクトリまたはファイルを取得
     let files = target.read_dir().unwrap();
-
     let num_childs = target.read_dir().unwrap().count();
-    let mut _childs = Vec::new();
-
-    //ノード配下のディレクトリまたはファイルを一つずつ見ていく
-    for dir_entry in files{
-
-        let _path = dir_entry.unwrap().path();      //パスを取得  
-        let _filename = _path.file_name().unwrap().to_string_lossy().into_owned();  //取得したパスからファイル名を抜き出してString型へ
-        let _child = if _path.is_dir(){ build_tree(&_path) }
-                     else{
-                            Box::new(Node{
-                            name: _filename,
-                            path: _path,
-                            node_type: NodeType::File,
-                            childs: Vec::new(),
-
-                            num_childs: 0,
-
-                            opened: false,
-                            ignore: false,})};
-        _childs.push(_child);
-    }
+    let _childs = get_childs(target);
 
     let new_node = Box::new(Node{
                     name: target.file_name().unwrap().to_string_lossy().into_owned(),
                     path: target.to_path_buf(),
                     node_type: NodeType::Folder,
                     childs: _childs,
-
                     num_childs: num_childs,
-
                     opened: false,
                     ignore: false,
     });
     return new_node
+}
+
+fn get_childs(target : &PathBuf) -> Vec<Box<Node>>{
+    let files = target.read_dir().unwrap();
+    let mut _childs = Vec::new();
+
+    for dir_entry in files{
+
+        let _path = dir_entry.unwrap().path();      //パスを取得  
+        let _filename = _path.file_name().unwrap().to_string_lossy().into_owned();  //取得したパスからファイル名を抜き出してString型へ
+        let _node_type = if _path.is_dir() {NodeType::Folder} else{NodeType::File};
+        let _child = Box::new(Node{
+                                name: _filename,
+                                path: _path,
+                                node_type: _node_type,
+                                childs: Vec::new(),
+                                num_childs: 0,
+                                opened: false,
+                                ignore: false,});
+        _childs.push(_child);
+    }
+
+    return _childs
 }
 //-----------------------------------------------------------------------------------------
 
@@ -87,8 +87,34 @@ impl Node{
             child.set_opened_all(value);
         }
     }
+
+    fn set_childs(&mut self, childs: Vec<Box<Node>>){
+        self.num_childs = childs.len();
+        self.childs = childs;
+    }
+
+    pub fn get_path(&self, mut route: VecDeque<usize>) -> PathBuf{
+
+        let _path = if route.len()!=0 {
+            let poped_node_idx = route.pop_front().unwrap();
+            self.childs[poped_node_idx].get_path(route)
+        }
+        else{
+            self.path.clone()
+        };
+
+        return _path
+
+    }
+
+    pub fn reset_node(&mut self){
+        self.set_childs(Vec::new());
+        return
+    }
+
     //-----------------------------------------------------------------------------------------
     pub fn open_node(&mut self, mut route: VecDeque<usize>){
+        //route : 現在選択されているノードの経路
 
         let result = route.pop_front();
         let poped_node_idx : usize;
@@ -108,6 +134,10 @@ impl Node{
 
         if route.len() == 0{
             if self.childs[poped_node_idx].opened == false{
+                if self.childs[poped_node_idx].childs.len() == 0{
+                    let _childs = get_childs(&self.childs[poped_node_idx].path);
+                    self.childs[poped_node_idx].set_childs(_childs);
+                }
                 self.childs[poped_node_idx].set_opened(true);
             }
             else {
@@ -126,6 +156,7 @@ impl Node{
         let texts = self.format_for_textline(0, VecDeque::new());
         return texts
     }
+
     fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
         let mut _output = VecDeque::new();
@@ -145,10 +176,15 @@ impl Node{
         let _name        = self.name.to_string();
         let _path        = self.path.clone();
         let output_elem =  match self.node_type{
-            NodeType::Folder => {TextElement{ text : _name, node_type : NodeType::Folder, path : _path,
-                                              rank : rank, route : route}}
-            NodeType::File   => {TextElement{ text : _name, node_type : NodeType::File, path : _path,
-                                              rank : rank, route : route}}
+            NodeType::Folder => {
+                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                TextElement{ text : _name, num_lines : _num_lines,
+                             node_type : NodeType::Folder, rank : rank, route : route}}
+
+            NodeType::File   => {
+                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                TextElement{ text : _name, num_lines : _num_lines,
+                             node_type : NodeType::File, rank : rank, route : route}}
         };
         _output.push_front(output_elem);
 
