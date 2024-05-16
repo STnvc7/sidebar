@@ -51,7 +51,7 @@ pub fn get_file_icon(filename : &String) -> &str{
 		FileType::Css	 => {"\x1b[38;5;32m{} "}
 		FileType::Json	 => {"\x1b[38;5;172m{} "},
 		FileType::Yaml   => {"\x1b[38;5;136m:- "},
-		FileType::Markdown => {"\x1b[38;5;109m•-  "},
+		FileType::Markdown => {"\x1b[38;5;109m•- "},
 		FileType::Text   => {"📄 "},
 		FileType::Image	 => {"🖼️ "}
 		FileType::Sound	 => {"🔊 "}
