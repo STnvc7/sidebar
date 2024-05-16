@@ -184,16 +184,17 @@ impl Node{
         //このノードの情報
         let _name        = self.name.to_string();
         let _path        = self.path.clone();
+        let _is_opened   = self.opened;
         let output_elem =  match self.node_type{
             NodeType::Folder => {
                 let _num_lines = get_num_lines(&_name, &(&rank*2));
                 TextElement{ text : _name, num_lines : _num_lines,
-                             node_type : NodeType::Folder, rank : rank, route : route}}
+                             node_type : NodeType::Folder, is_opened : _is_opened, rank : rank, route : route}}
 
             NodeType::File   => {
                 let _num_lines = get_num_lines(&_name, &(&rank*2));
                 TextElement{ text : _name, num_lines : _num_lines,
-                             node_type : NodeType::File, rank : rank, route : route}}
+                             node_type : NodeType::File, is_opened : false, rank : rank, route : route}}
         };
         _output.push_front(output_elem);
 

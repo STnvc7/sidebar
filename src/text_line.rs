@@ -23,6 +23,7 @@ pub struct TextElement{
 	pub text : String,
 	pub num_lines : usize,
 	pub node_type : NodeType, 
+	pub is_opened : bool,
 	pub rank : usize,
 	pub route : VecDeque<usize>,
 }
@@ -158,13 +159,14 @@ impl TextLine{
 		return String::from("  ").repeat(*rank)
 	}
 	fn format_text_for_display(&self, text : &String, num_lines : &usize, indent : &String,
-								color : &String, node_type : &NodeType) -> String{
+								color : &String, node_type : &NodeType, is_opened : &bool) -> String{
 
 		let line = 
-
 		if *num_lines == 1{
 			match node_type{
-				NodeType::Folder => { format!("{}{}{}❯ {}{}", color::RESET,indent, color, text, color::RESET) }
+				NodeType::Folder => {
+					let _arrow = if *is_opened {"▼ "} else {"▶ "};		//フォルダ名の先頭に付ける矢印
+					format!("{}{}{}{}{}{}", color::RESET,indent, color, _arrow, text, color::RESET) }
 		 		NodeType::File   => { format!("{}{}{}{}{}", color::RESET, indent, color, text, color::RESET) }
 			}
 		}
@@ -187,9 +189,13 @@ impl TextLine{
 				NodeType::Folder => {
 					for (i, b) in buf.iter().enumerate(){
 						_line.push_str(&format!("{}{}", &indent, &color));
-						if i == 0 { _line.push_str("❯ "); }
-						else{ _line.push_str("  "); }
-						_line.push_str(&format!("{}{}{}", b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
+
+						//フォルダ名の先頭につける矢印
+						let _arrow = 
+						if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
+						else{ "  " };
+
+						_line.push_str(&format!("{}{}{}{}", _arrow, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
 					}
 				}
 				NodeType::File => {
@@ -210,19 +216,14 @@ impl TextLine{
 		let separator = String::from("-").repeat(self.terminal_width - 1);
 
 		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1))?;
-		let console_msg_num_line = &self.console_msg.num_lines;
 
-		let mut i = self.display_start;
-		let mut line_counter = 0;
+		let mut i : usize			= self.display_start;
+		let mut line_counter :usize = 0;
 		loop{
 
-			let _text = &self.texts[i].text;
-			let _rank = self.texts[i].rank;
-			let _node_type = &self.texts[i].node_type;
-
-			let _color 	= self.get_display_color(&i, &self.cursor_idx);
-			let _indent = self.get_indent(&_rank);
-			let _num_lines = self.texts[i].num_lines;
+			let _color 		= self.get_display_color(&i, &self.cursor_idx);
+			let _indent 	= self.get_indent(&self.texts[i].rank);
+			let _num_lines 	= self.texts[i].num_lines;
 
 			//出力の行数分だけターミナルを掃除
 			queue!(stdout(), cursor::SavePosition)?;
@@ -231,19 +232,22 @@ impl TextLine{
 			}
 			queue!(stdout(), cursor::RestorePosition)?;
 
-			let _line = self.format_text_for_display(&_text, &_num_lines, &_indent, &_color, &_node_type);
+			//表示用に整形
+			let _line = self.format_text_for_display(&self.texts[i].text, &self.texts[i].num_lines, &_indent, &_color, 
+													 &self.texts[i].node_type, &self.texts[i].is_opened);
 			queue!(stdout(), Print(_line), MoveToNextLine(1))?;
 
+			//ループ終了条件の処理
 			i += 1;
 			line_counter += _num_lines;
-			if i > (self.texts.len() - 1) || line_counter > (self.terminal_height - console_msg_num_line - 3){
+			if i > (self.texts.len() - 1) || line_counter > (self.terminal_height - &self.console_msg.num_lines - 3){
 				break
 			}
 		}
 		//---------------------------------------------------------------------------------------------------------------------------
 
 		
-		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-console_msg_num_line-1) as u16),
+		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-&self.console_msg.num_lines-1) as u16),
 			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
