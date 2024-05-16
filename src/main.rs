@@ -2,6 +2,7 @@ mod node;
 mod app;
 mod viewer;
 mod color;
+mod file_icon;
 
 use std::io::{stdout, Result};
 
