@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 
-use crate::text_line::{TextElement, get_num_lines};
+use crate::viewer::{TextElement, get_num_lines};
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType{

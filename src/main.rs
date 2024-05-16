@@ -1,6 +1,6 @@
 mod node;
 mod app;
-mod text_line;
+mod viewer;
 mod color;
 
 use std::io::{stdout, Result};

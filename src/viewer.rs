@@ -53,7 +53,7 @@ display_end : ターミナルで表示する最後のインデックス
 terminal_width : ターミナルの横幅
 terminal_height : ターミナルの縦幅
 */
-pub struct TextLine{
+pub struct Viewer{
 	texts : VecDeque<TextElement>,
 	console_msg : ConsoleMessage, 
 	cursor_idx	  : usize, 
@@ -62,9 +62,9 @@ pub struct TextLine{
 	terminal_height : usize,
 }
 
-pub fn new() -> TextLine{
+pub fn new() -> Viewer{
 	let (width, height) = terminal::size().unwrap();
-	return TextLine{
+	return Viewer{
 		texts: VecDeque::new(),
 		console_msg : ConsoleMessage{message : String::from("to see help,  press 'h'"), num_lines : 1, status: ConsoleMessageStatus::Normal},
 		cursor_idx : 0, 
@@ -84,24 +84,30 @@ pub fn get_num_lines(text : &String, left_margin : &usize) -> usize{
 	return num_lines
 }
 
-impl TextLine{
+impl Viewer{
 
 	//-----------------------------------------------------------------------------------------
 	pub fn set_text(&mut self, text: VecDeque<TextElement>){
 		self.texts = text;
+		self.update_display_start();
+	}
 
+	fn update_display_start(&mut self){
 		//区切り線の数
 		let separator_size : usize = 2;
 		
+		//display_startからカーソルのインデックスまでの行数を計算
 		let mut num_display_lines : usize = 0;
 		for i in self.display_start..=self.cursor_idx{
 			num_display_lines += self.texts[i].num_lines;
 		}
 
+		//スクロールダウンするときの処理　スクロールして出てくる行の行数に応じてdisplay_startを更新
 		if num_display_lines > (self.terminal_height - self.console_msg.num_lines - separator_size - SCROLL_MARGIN){
 			self.display_start =  self.display_start + num_display_lines - (self.terminal_height - self.console_msg.num_lines - separator_size - SCROLL_MARGIN);
 		}
 
+		//スクロールアップするときの処理
 		if self.cursor_idx >= SCROLL_MARGIN  && self.cursor_idx < (self.display_start + SCROLL_MARGIN){
 			self.display_start = self.cursor_idx - SCROLL_MARGIN;
 		}
@@ -151,6 +157,7 @@ impl TextLine{
 
 	//display用の関数もろもろ-----------------------------------------------------------
 	fn get_display_color(&self, idx : &usize, cursor_idx : &usize) -> String{
+		//現在選択されているノードの場合はアンダーバーと緑色　それ以外は白
 		let color = if idx == cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) }
 					else { color::WHITE.to_string() };
 		return color
@@ -158,11 +165,12 @@ impl TextLine{
 	fn get_indent(&self, rank : &usize) -> String{
 		return String::from("  ").repeat(*rank)
 	}
+
 	fn format_text_for_display(&self, text : &String, num_lines : &usize, indent : &String,
 								color : &String, node_type : &NodeType, is_opened : &bool) -> String{
 
 		let line = 
-		if *num_lines == 1{
+		if *num_lines == 1{								//ファイル名が一行に収まるときの処理
 			match node_type{
 				NodeType::Folder => {
 					let _arrow = if *is_opened {"▼ "} else {"▶ "};		//フォルダ名の先頭に付ける矢印
@@ -171,7 +179,7 @@ impl TextLine{
 			}
 		}
 
-		else{
+		else{											//ファイル名が一行に収まらない時の処理
 			let mut buf : Vec<String> = Vec::new();
 			let mut s = String::new();
 			for c in text.chars(){
