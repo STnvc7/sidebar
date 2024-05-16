@@ -8,6 +8,7 @@ use crossterm::style::Print;
 
 use crate::color;
 use crate::node::NodeType;
+use crate::file_icon::get_file_icon;
 
 
 //表示がスクロールされる際のカーソルの余白(?)説明が下手
@@ -169,17 +170,19 @@ impl Viewer{
 	fn format_text_for_display(&self, text : &String, num_lines : &usize, indent : &String,
 								color : &String, node_type : &NodeType, is_opened : &bool) -> String{
 
+		let icon = get_file_icon(text);
+
 		let line = 
-		if *num_lines == 1{								//ファイル名が一行に収まるときの処理
+		if *num_lines == 1{ //ファイル名が一行に収まるときの処理
 			match node_type{
 				NodeType::Folder => {
 					let _arrow = if *is_opened {"▼ "} else {"▶ "};		//フォルダ名の先頭に付ける矢印
 					format!("{}{}{}{}{}{}", color::RESET,indent, color, _arrow, text, color::RESET) }
-		 		NodeType::File   => { format!("{}{}{}{}{}", color::RESET, indent, color, text, color::RESET) }
+		 		NodeType::File   => { format!("{}{}{}{}{}{}", color::RESET, indent, icon, color, text, color::RESET) }
 			}
 		}
 
-		else{											//ファイル名が一行に収まらない時の処理
+		else{  //ファイル名が一行に収まらない時の処理
 			let mut buf : Vec<String> = Vec::new();
 			let mut s = String::new();
 			for c in text.chars(){
@@ -208,7 +211,7 @@ impl Viewer{
 				}
 				NodeType::File => {
 					for b in buf.iter(){
-						_line.push_str(&format!("{}{}{}{}{}", &indent, &color, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
+						_line.push_str(&format!("{}{}{}{}{}{}", &indent, icon, &color, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
 					}		
 				}
 			}
