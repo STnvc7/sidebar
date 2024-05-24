@@ -1,6 +1,7 @@
 use std::env;
 use std::io;
 use std::process::Command;
+use std::path::PathBuf;
 
 use crossterm::terminal;
 use crossterm::event::{read, Event, KeyCode};
@@ -14,8 +15,11 @@ enum Commands{
     Quit,
     Up,
     Down,
+    TabUp,
+    TabDown,
     ShowPath,
-    Reset,
+    Reload,
+    New,
     OpenFile,
     OpenFolder,
     Resize,
@@ -23,9 +27,11 @@ enum Commands{
 }
 
 //無限ループでキー入力を待ち続ける
-pub fn run() -> io::Result<()>{
-
-    let root = env::current_dir().unwrap();
+pub fn run(path : &Option<String>) -> io::Result<()>{
+	
+    let root = match path{
+		Some(v) => {PathBuf::from(v)},
+		None	=> {env::current_dir().unwrap()}};
 
     let mut tree = node::build_tree(&root);
     let mut viewer = viewer::new();
@@ -46,7 +52,7 @@ pub fn run() -> io::Result<()>{
                     
                     KeyCode::Char('q')  =>  Ok(Commands::Quit),                         //アプリケーションを終了
                     KeyCode::Char('p')  =>  Ok(Commands::ShowPath),                     //選択されているノードのパスを表示
-                    KeyCode::Char('r')  =>  Ok(Commands::Reset),                        //リセット
+                    KeyCode::Char('r')  =>  Ok(Commands::Reload),                        //リセット
                     KeyCode::Char('h')  =>  Ok(Commands::Help),                         //ヘルプを表示
                     KeyCode::Enter      => {
                         match viewer.get_cursor_node_type(){
@@ -76,8 +82,7 @@ pub fn run() -> io::Result<()>{
                                          let _path = tree.get_path(_route).to_string_lossy().into_owned();
                                          viewer.set_console_msg(_path, ConsoleMessageStatus::Normal);}
 
-            Ok(Commands::Reset)      => {tree = node::build_tree(&root);
-                                         viewer = viewer::new();}
+            Ok(Commands::Reload)      => {tree = node::build_tree(&root)}
 
             Ok(Commands::Help)       => {let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : reset status");
                                          viewer.set_console_msg(_help_msg, ConsoleMessageStatus::Normal);}
@@ -90,6 +95,8 @@ pub fn run() -> io::Result<()>{
                                          let _ = Command::new("rsubl").arg(_path).spawn();} //TODO!!!!!!!!!!!!!!!
 
             Ok(Commands::Resize)     => {viewer.set_terminal_size();}
+
+            Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
 
             Err(s) =>  {viewer.set_console_msg(s, ConsoleMessageStatus::Error);}
         };
