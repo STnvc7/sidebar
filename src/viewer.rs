@@ -158,8 +158,8 @@ impl Viewer{
 
 	//display用の関数もろもろ-----------------------------------------------------------
 	fn get_display_color(&self, idx : &usize, cursor_idx : &usize) -> String{
-		//現在選択されているノードの場合はアンダーバーと緑色　それ以外は白
-		let color = if idx == cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) }
+		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
+		let color = if idx == cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
 					else { color::WHITE.to_string() };
 		return color
 	}
