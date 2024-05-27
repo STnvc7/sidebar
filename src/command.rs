@@ -11,8 +11,8 @@ pub enum Commands{
     Quit,
     Up,
     Down,
-    TabUp,
-    TabDown,
+    JumpUp,
+    JumpDown,
     ShowPath,
     Reload,
     NewFile,
@@ -29,9 +29,21 @@ pub fn cursor_up(viewer : &mut Viewer) -> Result<()> {
     Ok(())
 }
 
+pub fn cursor_jump_up(viewer : &mut Viewer) -> Result<()> {
+
+    viewer.cursor_jump_up();
+    Ok(())
+}
+
 pub fn cursor_down(viewer : &mut Viewer) -> Result<()> {
 
     viewer.cursor_down();
+    Ok(())
+}
+
+pub fn cursor_jump_down(viewer : &mut Viewer) -> Result<()> {
+
+    viewer.cursor_jump_down();
     Ok(())
 }
 

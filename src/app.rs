@@ -3,7 +3,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crossterm::terminal;
-use crossterm::event::{read, Event, KeyCode};
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 
 use crate::node;
 use crate::node::{NodeType};
@@ -37,23 +37,25 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
         let command = match event {
             //キーイベント
             Event::Key(e) => {
-                match e.code{
+                match e{
                     
-                    KeyCode::Char('q')  =>  Ok(Commands::Quit),                         //アプリケーションを終了
-                    KeyCode::Char('p')  =>  Ok(Commands::ShowPath),                     //選択されているノードのパスを表示
-                    KeyCode::Char('r')  =>  Ok(Commands::Reload),                        //リロード
-                    KeyCode::Char('h')  =>  Ok(Commands::Help),                         //ヘルプを表示
-                    KeyCode::Char('n')  =>  Ok(Commands::NewFile),
-                    KeyCode::Enter      => {
+                    KeyEvent{code:KeyCode::Char('q'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Quit),                         //アプリケーションを終了
+                    KeyEvent{code:KeyCode::Char('p'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::ShowPath),                     //選択されているノードのパスを表示
+                    KeyEvent{code:KeyCode::Char('r'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Reload),                        //リロード
+                    KeyEvent{code:KeyCode::Char('h'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Help),                         //ヘルプを表示
+                    KeyEvent{code:KeyCode::Char('n'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFile),
+                    KeyEvent{code:KeyCode::Enter,modifiers:_,kind:_,state:_}      => {
                         match viewer.get_cursor_node_type(){
                             NodeType::Folder => Ok(Commands::OpenFolder),               //フォルダをオープン
                             NodeType::File   => Ok(Commands::OpenFile),                 //ファイルを開く(何らかのテキストエディタで)
                         }
                     }
-                    KeyCode::Down       =>  Ok(Commands::Down),                         //カーソルを下に移動
-                    KeyCode::Up         =>  Ok(Commands::Up),                           //カーソルを上に移動
+                    KeyEvent{code:KeyCode::Down,modifiers:KeyModifiers::SHIFT,kind:_,state:_}       =>  Ok(Commands::JumpDown),
+                    KeyEvent{code:KeyCode::Up,modifiers:KeyModifiers::SHIFT,kind:_,state:_}       =>  Ok(Commands::JumpUp),
+                    KeyEvent{code:KeyCode::Down,modifiers:_,kind:_,state:_}       =>  Ok(Commands::Down),                         //カーソルを下に移動
+                    KeyEvent{code:KeyCode::Up,modifiers:_,kind:_,state:_}         =>  Ok(Commands::Up),                           //カーソルを上に移動
 
-                    KeyCode::Char(c)    => Err(String::from(format!("{} is invalid command", c))),
+                    KeyEvent{code:KeyCode::Char(c),modifiers:_,kind:_,state:_}    => Err(String::from(format!("{} is invalid command", c))),
                     _ => Err(String::from("no covered key")),
                 }        
             }
@@ -67,6 +69,10 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
             Ok(Commands::Up)         => {command::cursor_up(&mut viewer)?;}
 
             Ok(Commands::Down)       => {command::cursor_down(&mut viewer)?;}
+
+            Ok(Commands::JumpUp)     => {command::cursor_jump_up(&mut viewer)?;}
+
+            Ok(Commands::JumpDown)   => {command::cursor_jump_down(&mut viewer)?;}
 
             Ok(Commands::ShowPath)   => {command::show_path(&tree, &mut viewer)?;}
 

@@ -146,6 +146,38 @@ impl Viewer{
 		self.cursor_idx -= 1;
 	}
 
+	pub fn cursor_jump_down(&mut self){
+
+		let current_rank = &self.texts[self.cursor_idx].rank;
+
+		loop {
+			if self.cursor_idx == (self.texts.len() - 1){
+				return
+			}
+			self.cursor_idx += 1;
+
+			if &self.texts[self.cursor_idx].rank < current_rank{
+				break
+			}
+		}
+	}
+
+	pub fn cursor_jump_up(&mut self){
+
+		let current_rank = &self.texts[self.cursor_idx].rank;
+
+		loop {
+			if self.cursor_idx == 0{
+				return
+			}
+			self.cursor_idx -= 1;
+
+			if &self.texts[self.cursor_idx].rank < current_rank{
+				break
+			}
+		}
+	}
+
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
 	pub fn get_cursor_route(&self) -> VecDeque<usize>{
 		let idx = self.cursor_idx;
