@@ -82,7 +82,8 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
                                          let _path = tree.get_path(_route).to_string_lossy().into_owned();
                                          viewer.set_console_msg(_path, ConsoleMessageStatus::Normal);}
 
-            Ok(Commands::Reload)      => {tree = node::build_tree(&root)}
+            Ok(Commands::Reload)      => {let _route = viewer.get_cursor_route();
+                                         tree.update(_route)}
 
             Ok(Commands::Help)       => {let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : reset status");
                                          viewer.set_console_msg(_help_msg, ConsoleMessageStatus::Normal);}
