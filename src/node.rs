@@ -26,7 +26,7 @@ pub struct Node{
 //-----------------------------------------------------------------------------------------
 
 //最初の木を構築する関数
-pub fn build_tree(target: &PathBuf) -> Box<Node>{
+pub fn new(target: &PathBuf) -> Box<Node>{
 
     //ノードの配下にあるディレクトリまたはファイルを取得
     let _childs = get_childs(target);
@@ -128,57 +128,10 @@ impl Node{
         return _path
     }
 
-    pub fn update(&mut self){
+    pub fn update(&mut self, route : VecDeque<usize>){
 
-        if self.opened == false{ return }
-
-        //元々の子ノードと，更新された子ノード候補を取得
-        let mut new_paths = Vec::new();
-        let mut old_paths = Vec::new();
-
-        for child in self.childs.iter(){
-            old_paths.push(child.path.clone());
-        }
-
-        let files = self.path.read_dir().unwrap();
-        for f in files{
-            new_paths.push(f.unwrap().path());
-        }
-
-        //新しいファイルと消去されたファイルを取得
-        let mut new_files = Vec::new();
-        let mut removed_files = Vec::new();
-        for n in new_paths.iter(){
-            if old_paths.contains(n) == false{ new_files.push(n.clone()); }
-        }
-        for o in old_paths.iter(){
-            if new_paths.contains(o) == false{ removed_files.push(o.clone());}
-        }
-
-        // もし新しいファイルも消されたファイルもない場合はreturn
-        if new_files.len() + removed_files.len() == 0{ return }
-
-        
-        for removed_path in removed_files.iter(){
-            let index = self.childs.iter().position(|x| x.path == *removed_path).unwrap();
-            self.childs.remove(index); 
-        }
-        for new_path in new_files.iter(){
-            let _child = Box::new(Node{
-                                    name: new_path.file_name().unwrap().to_string_lossy().into_owned(),
-                                    path: new_path.clone(),
-                                    node_type: if new_path.is_dir() {NodeType::Folder} else{NodeType::File},
-                                    childs: Vec::new(),
-                                    num_childs: 0,
-                                    opened: false,
-                                    ignore: false,});
-            self.childs.push(_child); 
-        }
-
-        for child in self.childs.iter_mut(){
-            child.update();
-        }
-
+        self.open_node(route.clone());
+        self.open_node(route.clone())
     }
 
     //-----------------------------------------------------------------------------------------
@@ -203,11 +156,14 @@ impl Node{
 
         if route.len() == 0{
             if self.childs[poped_node_idx].opened == false{
-                if self.childs[poped_node_idx].childs.len() == 0{
-                    let _childs = get_childs(&self.childs[poped_node_idx].path);
-                    self.childs[poped_node_idx].set_childs(_childs);
+                match self.childs[poped_node_idx].node_type{
+                    NodeType::Folder => {
+                        let _childs = get_childs(&self.childs[poped_node_idx].path);
+                        self.childs[poped_node_idx].set_childs(_childs);
+                        self.childs[poped_node_idx].set_opened(true);
+                    }
+                    NodeType::File =>{}
                 }
-                self.childs[poped_node_idx].set_opened(true);
             }
             else {
                 self.childs[poped_node_idx].set_opened_all(false);

@@ -119,6 +119,10 @@ impl Viewer{
 		self.console_msg = ConsoleMessage{ message : console_msg, num_lines : _num_lines, status : status};
 	}
 
+	pub fn clean_console(&mut self){
+		self.console_msg = ConsoleMessage{ message : String::new(), num_lines : 1, status : ConsoleMessageStatus::Normal};
+	}
+
 	pub fn set_terminal_size(&mut self){
 		let (width, height) = terminal::size().unwrap();
 		self.terminal_width = width as usize;

@@ -1,30 +1,16 @@
 use std::env;
 use std::io;
-use std::process::Command;
 use std::path::PathBuf;
 
 use crossterm::terminal;
 use crossterm::event::{read, Event, KeyCode};
 
 use crate::node;
-use crate::node::NodeType;
+use crate::node::{NodeType};
 use crate::viewer;
 use crate::viewer::{ConsoleMessageStatus};
-
-enum Commands{
-    Quit,
-    Up,
-    Down,
-    TabUp,
-    TabDown,
-    ShowPath,
-    Reload,
-    New,
-    OpenFile,
-    OpenFolder,
-    Resize,
-    Help,
-}
+use crate::command;
+use crate::command::Commands;
 
 //無限ループでキー入力を待ち続ける
 pub fn run(path : &Option<String>) -> io::Result<()>{
@@ -33,8 +19,9 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
 		Some(v) => {PathBuf::from(v)},
 		None	=> {env::current_dir().unwrap()}};
 
-    let mut tree = node::build_tree(&root);
+    let mut tree = node::new(&root);
     let mut viewer = viewer::new();
+
 
     terminal::enable_raw_mode()?;
     loop{
@@ -45,6 +32,8 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
         // イベントの取得
         let event = read()?;
 
+        //viewer.clean_console();
+
         let command = match event {
             //キーイベント
             Event::Key(e) => {
@@ -52,8 +41,9 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
                     
                     KeyCode::Char('q')  =>  Ok(Commands::Quit),                         //アプリケーションを終了
                     KeyCode::Char('p')  =>  Ok(Commands::ShowPath),                     //選択されているノードのパスを表示
-                    KeyCode::Char('r')  =>  Ok(Commands::Reload),                        //リセット
+                    KeyCode::Char('r')  =>  Ok(Commands::Reload),                        //リロード
                     KeyCode::Char('h')  =>  Ok(Commands::Help),                         //ヘルプを表示
+                    KeyCode::Char('n')  =>  Ok(Commands::NewFile),
                     KeyCode::Enter      => {
                         match viewer.get_cursor_node_type(){
                             NodeType::Folder => Ok(Commands::OpenFolder),               //フォルダをオープン
@@ -74,28 +64,24 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
         match command{
             Ok(Commands::Quit)       => {break;}
 
-            Ok(Commands::Up)         => {viewer.cursor_up();}
+            Ok(Commands::Up)         => {command::cursor_up(&mut viewer)?;}
 
-            Ok(Commands::Down)       => {viewer.cursor_down();}
+            Ok(Commands::Down)       => {command::cursor_down(&mut viewer)?;}
 
-            Ok(Commands::ShowPath)   => {let _route = viewer.get_cursor_route();
-                                         let _path = tree.get_path(_route).to_string_lossy().into_owned();
-                                         viewer.set_console_msg(_path, ConsoleMessageStatus::Normal);}
+            Ok(Commands::ShowPath)   => {command::show_path(&tree, &mut viewer)?;}
 
-            Ok(Commands::Reload)      => {tree = node::build_tree(&root);
-                                          viewer = viewer::new();}
+            Ok(Commands::Reload)     => {command::reload(&mut tree, &viewer)?;}
 
-            Ok(Commands::Help)       => {let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : reset status");
-                                         viewer.set_console_msg(_help_msg, ConsoleMessageStatus::Normal);}
+            Ok(Commands::Help)       => {command::help(&mut viewer)?;}
 
-            Ok(Commands::OpenFolder) => {let _route = viewer.get_cursor_route();
-                                         tree.open_node(_route);}
+            Ok(Commands::NewFile)    => {command::new_file(&mut tree, &mut viewer)?;
+                                         command::reload(&mut tree, &viewer)?;}
 
-            Ok(Commands::OpenFile)   => {let _route = viewer.get_cursor_route();
-                                         let _path = tree.get_path(_route);
-                                         let _ = Command::new("rsubl").arg(_path).spawn();} //TODO!!!!!!!!!!!!!!!
+            Ok(Commands::OpenFolder) => {command::open_folder(&mut tree, &viewer)?;}
 
-            Ok(Commands::Resize)     => {viewer.set_terminal_size();}
+            Ok(Commands::OpenFile)   => {command::open_file(&tree, &viewer)?;} //TODO!!!!!!!!!!!!!!!
+
+            Ok(Commands::Resize)     => {command::resize(&mut viewer)?;}
 
             Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
 
