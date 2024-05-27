@@ -3,6 +3,7 @@ mod app;
 mod viewer;
 mod color;
 mod file_icon;
+mod command;
 
 use std::io::{stdout, Result};
 use std::env;

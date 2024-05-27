@@ -26,7 +26,7 @@ pub struct Node{
 //-----------------------------------------------------------------------------------------
 
 //最初の木を構築する関数
-pub fn build_tree(target: &PathBuf) -> Box<Node>{
+pub fn new(target: &PathBuf) -> Box<Node>{
 
     //ノードの配下にあるディレクトリまたはファイルを取得
     let _childs = get_childs(target);
@@ -156,9 +156,14 @@ impl Node{
 
         if route.len() == 0{
             if self.childs[poped_node_idx].opened == false{
-                let _childs = get_childs(&self.childs[poped_node_idx].path);
-                self.childs[poped_node_idx].set_childs(_childs);
-                self.childs[poped_node_idx].set_opened(true);
+                match self.childs[poped_node_idx].node_type{
+                    NodeType::Folder => {
+                        let _childs = get_childs(&self.childs[poped_node_idx].path);
+                        self.childs[poped_node_idx].set_childs(_childs);
+                        self.childs[poped_node_idx].set_opened(true);
+                    }
+                    NodeType::File =>{}
+                }
             }
             else {
                 self.childs[poped_node_idx].set_opened_all(false);
