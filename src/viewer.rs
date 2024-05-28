@@ -193,9 +193,9 @@ impl Viewer{
 	}
 
 	//display用の関数もろもろ-----------------------------------------------------------
-	fn get_display_color(&self, idx : &usize, cursor_idx : &usize) -> String{
+	fn get_display_color(&self, idx : &usize) -> String{
 		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
-		let color = if idx == cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+		let color = if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
 					else { color::WHITE.to_string() };
 		return color
 	}
@@ -258,31 +258,31 @@ impl Viewer{
 	}
 
 	//-----------------------------------------------------------------------------------------
-	pub fn display(&self) -> Result<()>{
+	pub fn display(&self){
 		
 		let separator = String::from("-").repeat(self.terminal_width - 1);
 
-		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1))?;
+		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1)).unwrap();
 
 		let mut i : usize			= self.display_start;
 		let mut line_counter :usize = 0;
 		loop{
 
-			let _color 		= self.get_display_color(&i, &self.cursor_idx);
+			let _color 		= self.get_display_color(&i);
 			let _indent 	= self.get_indent(&self.texts[i].rank);
 			let _num_lines 	= self.texts[i].num_lines;
 
 			//出力の行数分だけターミナルを掃除
-			queue!(stdout(), cursor::SavePosition)?;
+			queue!(stdout(), cursor::SavePosition).unwrap();
 			for _ in 0.._num_lines{
-				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1))?;
+				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1)).unwrap();
 			}
-			queue!(stdout(), cursor::RestorePosition)?;
+			queue!(stdout(), cursor::RestorePosition).unwrap();
 
 			//表示用に整形
 			let _line = self.format_text_for_display(&self.texts[i].text, &self.texts[i].num_lines, &_indent, &_color, 
 													 &self.texts[i].node_type, &self.texts[i].is_opened);
-			queue!(stdout(), Print(_line), MoveToNextLine(1))?;
+			queue!(stdout(), Print(_line), MoveToNextLine(1)).unwrap();
 
 			//ループ終了条件の処理
 			i += 1;
@@ -295,15 +295,13 @@ impl Viewer{
 
 		
 		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-&self.console_msg.num_lines-1) as u16),
-			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
+			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1)).unwrap();
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
 			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
 		};
-		queue!(stdout(), Print(console_msg))?;
+		queue!(stdout(), Print(console_msg)).unwrap();
 
-		stdout().flush()?;
-		
-		Ok(())
+		stdout().flush().unwrap();
 	}
 }

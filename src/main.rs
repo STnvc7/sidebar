@@ -15,9 +15,9 @@ use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 #[warn(unused_imports)]
 fn main() -> Result<()>{
 	let args = env::args().nth(1);
-	
+
     execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
-    let _ = app::run(&args);
+    app::run(&args)?;
     execute!(stdout(), cursor::Show, LeaveAlternateScreen)?;
 
     Ok(())

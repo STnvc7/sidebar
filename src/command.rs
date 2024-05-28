@@ -14,7 +14,8 @@ pub enum Commands{
     JumpUp,
     JumpDown,
     ShowPath,
-    Reload,
+    Update,
+    Rename,
     NewFile,
     NewFolder,
     OpenFile,
@@ -55,7 +56,7 @@ pub fn show_path(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
     Ok(())
 }
 
-pub fn reload(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
+pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
 
     let mut route = viewer.get_cursor_route();
 
@@ -96,9 +97,9 @@ pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
     loop{
         let _console_msg = format!("{}{}",console_msg_head,new_file_name);
         viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
-        viewer.display()?;
+        viewer.display();
 
-        let _event = read()?;
+        let _event = read().unwrap();
         match _event{
             Event::Key(_e) =>{
                 match _e.code{
@@ -127,7 +128,13 @@ pub fn open_file(tree : &Box<Node>, viewer : &Viewer) -> Result<()> {
 
     let route = viewer.get_cursor_route();
     let path = tree.get_path(route);
-    let _ = Command::new("rsubl").arg(path).spawn();
+    let result = Command::new("rmate").arg(path).spawn();
+
+    // match result{
+    //     Ok(v) => {},
+    //     Err() => {}
+    // }
+
     Ok(())
 }
 
