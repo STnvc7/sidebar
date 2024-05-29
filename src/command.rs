@@ -94,6 +94,7 @@ pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
     let mut new_file_name = String::new();
     let console_msg_head = String::from("Enter filename : ");
 
+    //new_file_nameにファイル名を
     loop{
         let _console_msg = format!("{}{}",console_msg_head,new_file_name);
         viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
@@ -113,6 +114,7 @@ pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
             _ => {}
         }
     }
+    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
     if parent_path.is_file(){
         parent_path = (*parent_path.parent().unwrap()).to_path_buf();
     }

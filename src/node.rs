@@ -115,6 +115,8 @@ impl Node{
         self.childs = childs;
     }
 
+
+    //Viewerで選択されているノードのルートを受け取り，パスを表示　　ルート：ノードの木の根っこから選択されているノードへのパス
     pub fn get_path(&self, mut route: VecDeque<usize>) -> PathBuf{
 
         let _path = if route.len()!=0 {
