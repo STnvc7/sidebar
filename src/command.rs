@@ -86,34 +86,38 @@ pub fn help(viewer : &mut Viewer) -> Result<()> {
     Ok(())
 }
 
+pub fn rename(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    let route = viewer.get_cursor_route();
+    let original_path = tree.get_path(route);
+
+    let console_msg_head = String::from("Rename to : ");
+    let new_name = type_from_console_stdin(viewer, console_msg_head.clone());
+
+    if new_name.len() == 0{
+        viewer.set_console_msg("no name entered".to_string(), ConsoleMessageStatus::Normal);
+        return Ok(())
+    }
+    let new_path_string = format!("{}/{}", (*original_path.parent().unwrap()).to_path_buf().to_string_lossy().into_owned(), new_name);
+
+    let result = cmd!("mv", original_path, new_path_string.clone()).stderr_capture().run();
+    //viewer.set_console_msg(format!("{:?}, {:?}",original_path, new_path_string), ConsoleMessageStatus::Normal);
+
+    match result{
+        Ok(_)   => {viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => {viewer.set_console_msg("coudln't rename...".to_string(), ConsoleMessageStatus::Error);}
+    }
+
+    Ok(())
+}
+
 pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
 
     let route = viewer.get_cursor_route();
     let mut parent_path = tree.get_path(route);
 
-    let mut new_file_name = String::new();
     let console_msg_head = String::from("Enter filename : ");
-
-    //new_file_nameにファイル名を
-    loop{
-        let _console_msg = format!("{}{}",console_msg_head,new_file_name);
-        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
-        viewer.display();
-
-        let _event = read().unwrap();
-        match _event{
-            Event::Key(_e) =>{
-                match _e.code{
-                    KeyCode::Char(c) => {new_file_name.push(c);},
-                    KeyCode::Enter   => {viewer.clean_console();
-                                        break},
-                    KeyCode::Backspace  => {if new_file_name.len() != 0 {let _ = new_file_name.pop().unwrap();}}
-                   _ => {}
-                }
-            },
-            _ => {}
-        }
-    }
+    let new_file_name = type_from_console_stdin(viewer, console_msg_head.clone());
 
     if new_file_name.len() == 0{
         return Ok(())
@@ -140,28 +144,9 @@ pub fn new_folder(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
     let route = viewer.get_cursor_route();
     let mut parent_path = tree.get_path(route);
 
-    let mut new_folder_name = String::new();
     let console_msg_head = String::from("Enter folder name : ");
 
-    loop{
-        let _console_msg = format!("{}{}",console_msg_head,new_folder_name);
-        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
-        viewer.display();
-
-        let _event = read().unwrap();
-        match _event{
-            Event::Key(_e) =>{
-                match _e.code{
-                    KeyCode::Char(c) => {new_folder_name.push(c);},
-                    KeyCode::Enter   => {viewer.clean_console();
-                                        break},
-                    KeyCode::Backspace  => {if new_folder_name.len() != 0 {let _ = new_folder_name.pop().unwrap();}}
-                   _ => {}
-                }
-            },
-            _ => {}
-        }
-    }
+    let new_folder_name = type_from_console_stdin(viewer, console_msg_head.clone());
 
     if new_folder_name.len() == 0{
         return Ok(())
@@ -188,7 +173,7 @@ pub fn open_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
     let route = viewer.get_cursor_route();
     let path = tree.get_path(route);
     
-    let result = cmd!("rmat", path).stderr_capture().run();
+    let result = cmd!("rmate", path).stderr_capture().run();
 
     match result{
         Ok(_)   => { },
@@ -209,4 +194,34 @@ pub fn resize(viewer : &mut Viewer) -> Result<()> {
 
     viewer.set_terminal_size();
     Ok(())
+}
+
+//-----------------------------------------------------------------------------
+fn type_from_console_stdin(viewer : &mut Viewer, console_msg_head : String) -> String{
+    
+    let mut new_name = String::new();
+
+    loop{
+        let _console_msg = format!("{}{}",console_msg_head, new_name);
+        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
+        viewer.display();
+
+        let _event = read().unwrap();
+        match _event{
+            Event::Key(_e) =>{
+                match _e.code{
+                    KeyCode::Char(c) => {new_name.push(c);},
+                    KeyCode::Enter   => {viewer.clean_console();
+                                         break},
+                    KeyCode::Esc     => {new_name.clear();
+                                         break}
+                    KeyCode::Backspace  => {if new_name.len() != 0 {let _ = new_name.pop().unwrap();}}
+                   _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+
+    return new_name
 }

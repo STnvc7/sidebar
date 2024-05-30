@@ -5,12 +5,13 @@ mod color;
 mod file_icon;
 mod command;
 
-use std::io::{stdout, Result};
+use std::io::stdout;
 use std::env;
 
 use crossterm;
 use crossterm::{cursor, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use anyhow::Result;
 
 #[warn(unused_imports)]
 fn main() -> Result<()>{

@@ -1,9 +1,9 @@
 use std::env;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use crossterm::terminal;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
+use anyhow::Result;
 
 use crate::node;
 use crate::node::{NodeType};
@@ -13,7 +13,7 @@ use crate::command;
 use crate::command::Commands;
 
 //無限ループでキー入力を待ち続ける
-pub fn run(path : &Option<String>) -> io::Result<()>{
+pub fn run(path : &Option<String>) -> Result<()>{
 
     let root : PathBuf;
 
@@ -51,6 +51,7 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
                     KeyEvent{code:KeyCode::Char('h'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Help),                         //ヘルプを表示
                     KeyEvent{code:KeyCode::Char('n'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFile),
                     KeyEvent{code:KeyCode::Char('N'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFolder),
+                    KeyEvent{code:KeyCode::Char('r'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Rename),
                     KeyEvent{code:KeyCode::Enter,modifiers:_,kind:_,state:_}      => {
                         match viewer.get_cursor_node_type(){
                             NodeType::Folder => Ok(Commands::OpenFolder),               //フォルダをオープン
@@ -79,16 +80,17 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
             Ok(Commands::ShowPath)   => {command::show_path(&tree, &mut viewer)?;}
             Ok(Commands::Update)     => {command::update(&mut tree, &viewer)?;}
             Ok(Commands::Help)       => {command::help(&mut viewer)?;}
-            Ok(Commands::NewFile)    => {command::new_file(&mut tree, &mut viewer)?;
-                                         command::update(&mut tree, &viewer)?;}
-            Ok(Commands::NewFolder)  => {command::new_folder(&mut tree, &mut viewer)?;
-                                         command::update(&mut tree, &viewer)?;}
+            Ok(Commands::Rename)     => {command::rename(&tree, &mut viewer)?;}
+            Ok(Commands::NewFile)    => {command::new_file(&tree, &mut viewer)?;}
+            Ok(Commands::NewFolder)  => {command::new_folder(&tree, &mut viewer)?;}
             Ok(Commands::OpenFolder) => {command::open_folder(&mut tree, &viewer)?;}
-            Ok(Commands::OpenFile)   => {command::open_file(&tree, &mut viewer)?;} //TODO!!!!!!!!!!!!!!!
+            Ok(Commands::OpenFile)   => {command::open_file(&tree, &mut viewer)?;}
             Ok(Commands::Resize)     => {command::resize(&mut viewer)?;}
-            Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
+            //Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
             Err(s) =>  {viewer.set_console_msg(s, ConsoleMessageStatus::Error);}
         };
+
+        command::update(&mut tree, &viewer)?;
     }
 
     terminal::disable_raw_mode().unwrap();
