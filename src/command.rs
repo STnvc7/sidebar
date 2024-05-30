@@ -1,7 +1,7 @@
 use std::io::Result;
-use std::process::Command;
 
 use crossterm::event::{read, Event, KeyCode};
+use duct::cmd;
 
 use crate::node::{Node};
 use crate::viewer::{Viewer, ConsoleMessageStatus};
@@ -114,28 +114,86 @@ pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
             _ => {}
         }
     }
+
+    if new_file_name.len() == 0{
+        return Ok(())
+    }
+
     //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
     if parent_path.is_file(){
         parent_path = (*parent_path.parent().unwrap()).to_path_buf();
     }
     let new_file_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_file_name);
-    viewer.set_console_msg(new_file_path_string.clone(), ConsoleMessageStatus::Normal);
 
-    let _ = Command::new("touch").arg(new_file_path_string).spawn();
+    let result = cmd!("touch", new_file_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => {viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => {viewer.set_console_msg("coudln't make file...".to_string(), ConsoleMessageStatus::Error);}
+    }
 
     Ok(())
 }
 
-pub fn open_file(tree : &Box<Node>, viewer : &Viewer) -> Result<()> {
+pub fn new_folder(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    let route = viewer.get_cursor_route();
+    let mut parent_path = tree.get_path(route);
+
+    let mut new_folder_name = String::new();
+    let console_msg_head = String::from("Enter folder name : ");
+
+    loop{
+        let _console_msg = format!("{}{}",console_msg_head,new_folder_name);
+        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
+        viewer.display();
+
+        let _event = read().unwrap();
+        match _event{
+            Event::Key(_e) =>{
+                match _e.code{
+                    KeyCode::Char(c) => {new_folder_name.push(c);},
+                    KeyCode::Enter   => {viewer.clean_console();
+                                        break},
+                    KeyCode::Backspace  => {if new_folder_name.len() != 0 {let _ = new_folder_name.pop().unwrap();}}
+                   _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+
+    if new_folder_name.len() == 0{
+        return Ok(())
+    }
+
+    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
+    if parent_path.is_file(){
+        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
+    }
+    let new_folder_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_folder_name);
+
+    let result = cmd!("mkdir", new_folder_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => {viewer.set_console_msg(new_folder_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => {viewer.set_console_msg("coudln't make folder...".to_string(), ConsoleMessageStatus::Error);}
+    }
+
+    Ok(())
+}
+
+pub fn open_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
     let route = viewer.get_cursor_route();
     let path = tree.get_path(route);
-    let result = Command::new("rmate").arg(path).spawn();
+    
+    let result = cmd!("rmat", path).stderr_capture().run();
 
-    // match result{
-    //     Ok(v) => {},
-    //     Err() => {}
-    // }
+    match result{
+        Ok(_)   => { },
+        Err(_)  => { viewer.set_console_msg("coudln't open file...".to_string(), ConsoleMessageStatus::Error);}
+    }
 
     Ok(())
 }

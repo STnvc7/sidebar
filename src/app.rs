@@ -50,6 +50,7 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
                     KeyEvent{code:KeyCode::Char('u'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Update),                        //リロード
                     KeyEvent{code:KeyCode::Char('h'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Help),                         //ヘルプを表示
                     KeyEvent{code:KeyCode::Char('n'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFile),
+                    KeyEvent{code:KeyCode::Char('N'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFolder),
                     KeyEvent{code:KeyCode::Enter,modifiers:_,kind:_,state:_}      => {
                         match viewer.get_cursor_node_type(){
                             NodeType::Folder => Ok(Commands::OpenFolder),               //フォルダをオープン
@@ -80,8 +81,10 @@ pub fn run(path : &Option<String>) -> io::Result<()>{
             Ok(Commands::Help)       => {command::help(&mut viewer)?;}
             Ok(Commands::NewFile)    => {command::new_file(&mut tree, &mut viewer)?;
                                          command::update(&mut tree, &viewer)?;}
+            Ok(Commands::NewFolder)  => {command::new_folder(&mut tree, &mut viewer)?;
+                                         command::update(&mut tree, &viewer)?;}
             Ok(Commands::OpenFolder) => {command::open_folder(&mut tree, &viewer)?;}
-            Ok(Commands::OpenFile)   => {command::open_file(&tree, &viewer)?;} //TODO!!!!!!!!!!!!!!!
+            Ok(Commands::OpenFile)   => {command::open_file(&tree, &mut viewer)?;} //TODO!!!!!!!!!!!!!!!
             Ok(Commands::Resize)     => {command::resize(&mut viewer)?;}
             Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
             Err(s) =>  {viewer.set_console_msg(s, ConsoleMessageStatus::Error);}
