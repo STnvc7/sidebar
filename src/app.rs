@@ -29,11 +29,11 @@ pub fn run(path : &Option<String>) -> Result<()>{
     let mut viewer = viewer::new();
 
 
-    terminal::enable_raw_mode().unwrap();
+    terminal::enable_raw_mode()?;
     loop{
         let _text = tree.format();
         viewer.set_text(_text);
-        viewer.display();
+        viewer.display()?;
 
         // イベントの取得
         let event = read().unwrap();
@@ -52,6 +52,7 @@ pub fn run(path : &Option<String>) -> Result<()>{
                     KeyEvent{code:KeyCode::Char('n'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFile),
                     KeyEvent{code:KeyCode::Char('N'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::NewFolder),
                     KeyEvent{code:KeyCode::Char('r'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Rename),
+                    KeyEvent{code:KeyCode::Char('m'),modifiers:_,kind:_,state:_}  =>  Ok(Commands::Move),
                     KeyEvent{code:KeyCode::Enter,modifiers:_,kind:_,state:_}      => {
                         match viewer.get_cursor_node_type(){
                             NodeType::Folder => Ok(Commands::OpenFolder),               //フォルダをオープン
@@ -71,26 +72,31 @@ pub fn run(path : &Option<String>) -> Result<()>{
             _ => {Err(String::from("cannot accept keys..."))}
         };
 
-        match command{
+        #[allow(unreachable_patterns)]
+        let result = match command{
             Ok(Commands::Quit)       => {break;}
-            Ok(Commands::Up)         => {command::cursor_up(&mut viewer)?;}
-            Ok(Commands::Down)       => {command::cursor_down(&mut viewer)?;}
-            Ok(Commands::JumpUp)     => {command::cursor_jump_up(&mut viewer)?;}
-            Ok(Commands::JumpDown)   => {command::cursor_jump_down(&mut viewer)?;}
-            Ok(Commands::ShowPath)   => {command::show_path(&tree, &mut viewer)?;}
-            Ok(Commands::Update)     => {command::update(&mut tree, &viewer)?;}
-            Ok(Commands::Help)       => {command::help(&mut viewer)?;}
-            Ok(Commands::Rename)     => {command::rename(&tree, &mut viewer)?;}
-            Ok(Commands::NewFile)    => {command::new_file(&tree, &mut viewer)?;}
-            Ok(Commands::NewFolder)  => {command::new_folder(&tree, &mut viewer)?;}
-            Ok(Commands::OpenFolder) => {command::open_folder(&mut tree, &viewer)?;}
-            Ok(Commands::OpenFile)   => {command::open_file(&tree, &mut viewer)?;}
-            Ok(Commands::Resize)     => {command::resize(&mut viewer)?;}
-            //Ok(_)                    => {viewer.set_console_msg(String::from("We're working on!!!"), ConsoleMessageStatus::Error);}
-            Err(s) =>  {viewer.set_console_msg(s, ConsoleMessageStatus::Error);}
+            Ok(Commands::Up)         => {command::cursor_up(&mut viewer)}
+            Ok(Commands::Down)       => {command::cursor_down(&mut viewer)}
+            Ok(Commands::JumpUp)     => {command::cursor_jump_up(&mut viewer)}
+            Ok(Commands::JumpDown)   => {command::cursor_jump_down(&mut viewer)}
+            Ok(Commands::ShowPath)   => {command::show_path(&tree, &mut viewer)}
+            Ok(Commands::Update)     => {command::update(&mut tree, &viewer)}
+            Ok(Commands::Help)       => {command::help(&mut viewer)}
+            Ok(Commands::Rename)     => {command::rename(&mut tree, &mut viewer)}
+            Ok(Commands::Move)       => {command::move_to(&mut tree, &mut viewer)}
+            Ok(Commands::NewFile)    => {command::new_file(&mut tree, &mut viewer)}
+            Ok(Commands::NewFolder)  => {command::new_folder(&mut tree, &mut viewer)}
+            Ok(Commands::OpenFolder) => {command::open_folder(&mut tree, &viewer)}
+            Ok(Commands::OpenFile)   => {command::open_file(&tree, &mut viewer)}
+            Ok(Commands::Resize)     => {command::resize(&mut viewer)}
+            Ok(_)                    => {Err(anyhow::anyhow!("We're working on!!!"))}
+            Err(s) =>  {Err(anyhow::anyhow!(s))}
         };
 
-        command::update(&mut tree, &viewer)?;
+        match result {
+            Ok(_) => {}
+            Err(e) => {viewer.set_console_msg(format!("{}",e), ConsoleMessageStatus::Error)}
+        }
     }
 
     terminal::disable_raw_mode().unwrap();

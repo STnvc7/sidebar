@@ -4,14 +4,13 @@ use std::cmp::Ordering;
 
 use crate::viewer::{TextElement, get_num_lines};
 
-#[derive(Debug, PartialEq)]
 pub enum NodeType{
     Folder,
     File,
 }
 
 //ファイルの木構造を構成するノード
-#[derive(Debug)]
+#[allow(dead_code)]
 pub struct Node{
     name    : String,
     path    : PathBuf,

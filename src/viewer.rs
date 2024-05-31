@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
-use std::io::{stdout, Result, Write};
+use std::io::{stdout, Write};
 
 use crossterm::{cursor, queue, terminal};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
+use anyhow::Result;
 
 use crate::color;
 use crate::node::NodeType;
@@ -57,7 +58,8 @@ terminal_height : ターミナルの縦幅
 pub struct Viewer{
 	texts : VecDeque<TextElement>,
 	console_msg : ConsoleMessage, 
-	cursor_idx	  : usize, 
+	cursor_idx	  : usize,
+	secondly_cursor_idx : usize,
 	display_start : usize,
 	terminal_width : usize,
 	terminal_height : usize,
@@ -68,7 +70,8 @@ pub fn new() -> Viewer{
 	return Viewer{
 		texts: VecDeque::new(),
 		console_msg : ConsoleMessage{message : String::from("to see help,  press 'h'"), num_lines : 1, status: ConsoleMessageStatus::Normal},
-		cursor_idx : 0, 
+		cursor_idx : 0,
+		secondly_cursor_idx : 0,
 		display_start: 0,
 		terminal_width : width as usize,
 		terminal_height : height as usize,
@@ -96,7 +99,7 @@ impl Viewer{
 	fn update_display_start(&mut self){
 		//区切り線の数
 		let separator_size : usize = 2;
-		
+
 		//display_startからカーソルのインデックスまでの行数を計算
 		let mut num_display_lines : usize = 0;
 		for i in self.display_start..=self.cursor_idx{
@@ -131,51 +134,75 @@ impl Viewer{
 
 	//カーソル操作----------------------------------------------------------------------------------
 
-	pub fn cursor_down(&mut self){
+	pub fn cursor_down(&mut self) -> Result<()>{
 
 		if self.cursor_idx == (self.texts.len() - 1){
-			return
+			return Err(anyhow::anyhow!("reach to bottom"));
 		}
 		self.cursor_idx += 1;
+		self.secondly_cursor_idx += 1;
+		Ok(())
 	}
 
-	pub fn cursor_up(&mut self){
+	pub fn cursor_up(&mut self) -> Result<()>{
+
 		if self.cursor_idx == 0{
-			return
+			return Err(anyhow::anyhow!("reach to top"));
 		}
 		self.cursor_idx -= 1;
+		self.secondly_cursor_idx -= 1;
+		Ok(())
 	}
 
-	pub fn cursor_jump_down(&mut self){
+	pub fn cursor_jump_down(&mut self) -> Result<()>{
 
-		let current_rank = &self.texts[self.cursor_idx].rank;
+		let current_rank = self.texts[self.cursor_idx].rank;
 
 		loop {
-			if self.cursor_idx == (self.texts.len() - 1){
-				return
-			}
-			self.cursor_idx += 1;
-
-			if &self.texts[self.cursor_idx].rank < current_rank{
+			self.cursor_down()?;
+			if self.texts[self.cursor_idx].rank < current_rank{
 				break
 			}
 		}
+		Ok(())
 	}
 
-	pub fn cursor_jump_up(&mut self){
+	pub fn cursor_jump_up(&mut self) -> Result<()>{
 
-		let current_rank = &self.texts[self.cursor_idx].rank;
+		let current_rank = self.texts[self.cursor_idx].rank;
 
 		loop {
-			if self.cursor_idx == 0{
-				return
-			}
-			self.cursor_idx -= 1;
-
-			if &self.texts[self.cursor_idx].rank < current_rank{
+			self.cursor_up()?;
+			if self.texts[self.cursor_idx].rank < current_rank{
 				break
 			}
 		}
+		Ok(())
+	}
+
+	//-----------------------------------------------------------
+
+	pub fn init_secondly_cursor(&mut self) -> Result<()>{
+		self.secondly_cursor_idx = self.cursor_idx;
+		Ok(())
+	}
+	
+	pub fn secondly_cursor_down(&mut self) -> Result<()>{
+
+		if self.secondly_cursor_idx == (self.texts.len() - 1){
+			return Err(anyhow::anyhow!("reach to bottom"));
+		}
+		self.secondly_cursor_idx += 1;
+		Ok(())
+	}
+
+	pub fn secondly_cursor_up(&mut self) -> Result<()>{
+
+		if self.secondly_cursor_idx == 0{
+			return Err(anyhow::anyhow!("reach to top"));
+		}
+		self.secondly_cursor_idx -= 1;
+		Ok(())
 	}
 
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
@@ -196,6 +223,7 @@ impl Viewer{
 	fn get_display_color(&self, idx : &usize) -> String{
 		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
 		let color = if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+					else if *idx == self.secondly_cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) }
 					else { color::WHITE.to_string() };
 		return color
 	}
@@ -238,10 +266,8 @@ impl Viewer{
 						_line.push_str(&format!("{}{}", &indent, &color));
 
 						//フォルダ名の先頭につける矢印
-						let _arrow = 
-						if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
-						else{ "  " };
-
+						let _arrow = if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
+									 else{ "  " };
 						_line.push_str(&format!("{}{}{}{}", _arrow, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
 					}
 				}
@@ -258,11 +284,11 @@ impl Viewer{
 	}
 
 	//-----------------------------------------------------------------------------------------
-	pub fn display(&self){
+	pub fn display(&self) -> Result<()>{
 		
 		let separator = String::from("-").repeat(self.terminal_width - 1);
 
-		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1)).unwrap();
+		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1))?;
 
 		let mut i : usize			= self.display_start;
 		let mut line_counter :usize = 0;
@@ -273,16 +299,16 @@ impl Viewer{
 			let _num_lines 	= self.texts[i].num_lines;
 
 			//出力の行数分だけターミナルを掃除
-			queue!(stdout(), cursor::SavePosition).unwrap();
+			queue!(stdout(), cursor::SavePosition)?;
 			for _ in 0.._num_lines{
-				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1)).unwrap();
+				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1))?;
 			}
-			queue!(stdout(), cursor::RestorePosition).unwrap();
+			queue!(stdout(), cursor::RestorePosition)?;
 
 			//表示用に整形
 			let _line = self.format_text_for_display(&self.texts[i].text, &self.texts[i].num_lines, &_indent, &_color, 
 													 &self.texts[i].node_type, &self.texts[i].is_opened);
-			queue!(stdout(), Print(_line), MoveToNextLine(1)).unwrap();
+			queue!(stdout(), Print(_line), MoveToNextLine(1))?;
 
 			//ループ終了条件の処理
 			i += 1;
@@ -295,13 +321,16 @@ impl Viewer{
 
 		
 		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-&self.console_msg.num_lines-1) as u16),
-			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1)).unwrap();
+			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
+
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
 			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
 		};
-		queue!(stdout(), Print(console_msg)).unwrap();
+		queue!(stdout(), Print(console_msg))?;
 
-		stdout().flush().unwrap();
+		stdout().flush()?;
+
+		Ok(())
 	}
 }
