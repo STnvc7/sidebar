@@ -90,8 +90,7 @@ pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
     let route = viewer.get_cursor_route();
     let original_path = tree.get_path(route);
     let new_path = get_path_from_secondly_cursor(tree, viewer)?;
-
-
+    
     viewer.init_secondly_cursor()?;
     Ok(())
 
@@ -114,8 +113,7 @@ pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
     let new_name = type_from_console_stdin(viewer, console_msg_head.clone())?;
 
     if new_name.len() == 0{
-        viewer.set_console_msg("no name entered".to_string(), ConsoleMessageStatus::Normal);
-        return Ok(())
+        return Err(anyhow::anyhow!("aborted"));
     }
     let new_path_string = format!("{}/{}", (*original_path.parent().unwrap()).to_path_buf().to_string_lossy().into_owned(), new_name);
 
