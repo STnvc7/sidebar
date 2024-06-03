@@ -5,19 +5,20 @@ mod color;
 mod file_icon;
 mod command;
 
-use std::io::{stdout, Result};
+use std::io::stdout;
 use std::env;
 
 use crossterm;
 use crossterm::{cursor, execute};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use anyhow::Result;
 
 #[warn(unused_imports)]
 fn main() -> Result<()>{
 	let args = env::args().nth(1);
-	
+
     execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
-    let _ = app::run(&args);
+    app::run(&args)?;
     execute!(stdout(), cursor::Show, LeaveAlternateScreen)?;
 
     Ok(())

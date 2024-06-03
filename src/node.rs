@@ -4,14 +4,13 @@ use std::cmp::Ordering;
 
 use crate::viewer::{TextElement, get_num_lines};
 
-#[derive(Debug, PartialEq)]
 pub enum NodeType{
     Folder,
     File,
 }
 
 //ファイルの木構造を構成するノード
-#[derive(Debug)]
+#[allow(dead_code)]
 pub struct Node{
     name    : String,
     path    : PathBuf,
@@ -115,6 +114,8 @@ impl Node{
         self.childs = childs;
     }
 
+
+    //Viewerで選択されているノードのルートを受け取り，パスを表示　　ルート：ノードの木の根っこから選択されているノードへのパス
     pub fn get_path(&self, mut route: VecDeque<usize>) -> PathBuf{
 
         let _path = if route.len()!=0 {
@@ -128,10 +129,10 @@ impl Node{
         return _path
     }
 
-    pub fn update(&mut self, route : VecDeque<usize>){
+    pub fn update_node(&mut self, route : VecDeque<usize>){
 
         self.open_node(route.clone());
-        self.open_node(route.clone())
+        self.open_node(route.clone());
     }
 
     //-----------------------------------------------------------------------------------------

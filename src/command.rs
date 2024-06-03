@@ -1,63 +1,47 @@
-use std::io::Result;
-use std::process::Command;
+use std::path::PathBuf;
 
 use crossterm::event::{read, Event, KeyCode};
+use duct::cmd;
+use anyhow::{Context, Result};
 
 use crate::node::{Node};
 use crate::viewer::{Viewer, ConsoleMessageStatus};
 
-
-pub enum Commands{
-    Quit,
-    Up,
-    Down,
-    JumpUp,
-    JumpDown,
-    ShowPath,
-    Reload,
-    NewFile,
-    NewFolder,
-    OpenFile,
-    OpenFolder,
-    Resize,
-    Help,
-}
-
 pub fn cursor_up(viewer : &mut Viewer) -> Result<()> {
 
-    viewer.cursor_up();
+    viewer.cursor_up()?;
     Ok(())
 }
 
 pub fn cursor_jump_up(viewer : &mut Viewer) -> Result<()> {
 
-    viewer.cursor_jump_up();
+    viewer.cursor_jump_up()?;
     Ok(())
 }
 
 pub fn cursor_down(viewer : &mut Viewer) -> Result<()> {
 
-    viewer.cursor_down();
+    viewer.cursor_down()?;
     Ok(())
 }
 
 pub fn cursor_jump_down(viewer : &mut Viewer) -> Result<()> {
 
-    viewer.cursor_jump_down();
+    viewer.cursor_jump_down()?;
     Ok(())
 }
 
 pub fn show_path(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let path = tree.get_path(route).to_string_lossy().into_owned();
     viewer.set_console_msg(path, ConsoleMessageStatus::Normal);
     Ok(())
 }
 
-pub fn reload(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
+pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
 
-    let mut route = viewer.get_cursor_route();
+    let mut route = viewer.get_cursor_route()?;
 
     loop {
         if route.len() == 0{
@@ -73,67 +57,157 @@ pub fn reload(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
         }
     }
 
-    tree.update(route);
+    tree.update_node(route.clone());
+    Ok(())
+}
+
+pub fn copy() -> Result<()> {
+    Ok(())
+}
+
+pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    viewer.activate_secondly_cursor()?;
+
+    let route = viewer.get_cursor_route()?;
+    let original_path = tree.get_path(route);
+    let file_name_osstr = &original_path.file_name().context("coudln't get filename")?;
+    let file_name_str = file_name_osstr.to_str().context("coudln't convert OsStr to &str")?;
+
+    let mut destination = get_path_from_secondly_cursor(tree, viewer)?;
+
+    if destination.is_file() {
+        destination = (*destination.parent().unwrap()).to_path_buf();
+    }
+
+    let new_file_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
+
+    let result = cmd!("mv", original_path, new_file_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't move..."));}
+    }
+
+    update(tree, viewer)?;
+
+    viewer.deactivate_secondly_cursor()?;
+
     Ok(())
 }
 
 pub fn help(viewer : &mut Viewer) -> Result<()> {
 
-    let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : reset status");
+    let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : rename, 'n' : new file, 'N' : new folder");
     viewer.set_console_msg(_help_msg, ConsoleMessageStatus::Normal);
 
     Ok(())
 }
 
-pub fn new_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()>{
+pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
-    let mut parent_path = tree.get_path(route);
+    let route = viewer.get_cursor_route()?;
+    let original_path = tree.get_path(route);
 
-    let mut new_file_name = String::new();
-    let console_msg_head = String::from("Enter filename : ");
+    let console_msg_head = String::from("Rename to : ");
+    let new_name = type_from_console_stdin(viewer, console_msg_head.clone())?;
 
-    loop{
-        let _console_msg = format!("{}{}",console_msg_head,new_file_name);
-        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
-        viewer.display()?;
-
-        let _event = read()?;
-        match _event{
-            Event::Key(_e) =>{
-                match _e.code{
-                    KeyCode::Char(c) => {new_file_name.push(c);},
-                    KeyCode::Enter   => {viewer.clean_console();
-                                        break},
-                    KeyCode::Backspace  => {if new_file_name.len() != 0 {let _ = new_file_name.pop().unwrap();}}
-                   _ => {}
-                }
-            },
-            _ => {}
-        }
+    if new_name.len() == 0{
+        return Err(anyhow::anyhow!("aborted"));
     }
-    if parent_path.is_file(){
-        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
-    }
-    let new_file_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_file_name);
-    viewer.set_console_msg(new_file_path_string.clone(), ConsoleMessageStatus::Normal);
+    let new_path_string = format!("{}/{}", (*original_path.parent().unwrap()).to_path_buf().to_string_lossy().into_owned(), new_name);
 
-    let _ = Command::new("touch").arg(new_file_path_string).spawn();
+    let result = cmd!("mv", original_path, new_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => {viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't rename..."));}
+    }
+
+    update(tree, viewer)?;
 
     Ok(())
 }
 
-pub fn open_file(tree : &Box<Node>, viewer : &Viewer) -> Result<()> {
+pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
+    let mut parent_path = tree.get_path(route);
+
+    let console_msg_head = String::from("Enter filename : ");
+    let new_file_name = type_from_console_stdin(viewer, console_msg_head.clone())?;
+
+    if new_file_name.len() == 0{
+        return Ok(())
+    }
+
+    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
+    if parent_path.is_file(){
+        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
+    }
+    let new_file_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_file_name);
+
+    let result = cmd!("touch", new_file_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't make file..."));}
+    }
+
+    update(tree, viewer)?;
+
+    Ok(())
+}
+
+pub fn new_folder(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    let route = viewer.get_cursor_route()?;
+    let mut parent_path = tree.get_path(route);
+
+    let console_msg_head = String::from("Enter folder name : ");
+
+    let new_folder_name = type_from_console_stdin(viewer, console_msg_head.clone())?;
+
+    if new_folder_name.len() == 0{
+        return Ok(())
+    }
+
+    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
+    if parent_path.is_file(){
+        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
+    }
+    let new_folder_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_folder_name);
+
+    let result = cmd!("mkdir", new_folder_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => {viewer.set_console_msg(new_folder_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't make folder...")); }
+    }
+
+    update(tree, viewer)?;
+
+    Ok(())
+}
+
+pub fn open_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    let route = viewer.get_cursor_route()?;
     let path = tree.get_path(route);
-    let _ = Command::new("rsubl").arg(path).spawn();
+    
+    let result = cmd!("rmate", path).stderr_capture().run();
+
+    match result{
+        Ok(_)   => { },
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't open file..."));}
+    }
+
     Ok(())
 }
 
 pub fn open_folder(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
 
-    let _route = viewer.get_cursor_route();
+    let _route = viewer.get_cursor_route()?;
     tree.open_node(_route);
     Ok(())
 }
@@ -142,4 +216,57 @@ pub fn resize(viewer : &mut Viewer) -> Result<()> {
 
     viewer.set_terminal_size();
     Ok(())
+}
+
+//-----------------------------------------------------------------------------
+fn type_from_console_stdin(viewer : &mut Viewer, console_msg_head : String) -> Result<String>{
+    
+    let mut new_name = String::new();
+
+    loop{
+        let _console_msg = format!("{}{}",console_msg_head, new_name);
+        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
+        viewer.display()?;
+
+        let _event = read()?;
+        match _event{
+            Event::Key(_e) =>{
+                match _e.code{
+                    KeyCode::Char(c) => {new_name.push(c);},
+                    KeyCode::Enter   => {viewer.clean_console();
+                                         break},
+                    KeyCode::Esc     => {new_name.clear();
+                                         break}
+                    KeyCode::Backspace  => {if new_name.len() != 0 {let _ = new_name.pop().unwrap();}}
+                   _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+
+    return Ok(new_name)
+}
+
+fn get_path_from_secondly_cursor(tree: &Box<Node>, viewer : &mut Viewer) -> Result<PathBuf>{
+
+    let path_result = loop{
+        let _event = read()?;
+        match _event{
+            Event::Key(_e) =>{
+                match _e.code{
+                    KeyCode::Down    => {let _ = viewer.secondly_cursor_down();},
+                    KeyCode::Up      => {let _ = viewer.secondly_cursor_up();},
+                    KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
+                                         break Ok(tree.get_path(_route))},
+                    KeyCode::Esc     => {break Err(anyhow::anyhow!("aborted"));}
+                   _ => {}
+                }
+            },
+            _ => {}
+        }
+        viewer.display()?;
+    };
+    
+    return path_result
 }

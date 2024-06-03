@@ -1,10 +1,12 @@
 use std::collections::VecDeque;
-use std::io::{stdout, Result, Write};
+use std::io::{stdout, Write};
 
 use crossterm::{cursor, queue, terminal};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
+
+use anyhow::{Context, Result};
 
 use crate::color;
 use crate::node::NodeType;
@@ -57,7 +59,8 @@ terminal_height : ターミナルの縦幅
 pub struct Viewer{
 	texts : VecDeque<TextElement>,
 	console_msg : ConsoleMessage, 
-	cursor_idx	  : usize, 
+	cursor_idx	  : usize,
+	secondly_cursor_idx : Option<usize>,
 	display_start : usize,
 	terminal_width : usize,
 	terminal_height : usize,
@@ -68,7 +71,8 @@ pub fn new() -> Viewer{
 	return Viewer{
 		texts: VecDeque::new(),
 		console_msg : ConsoleMessage{message : String::from("to see help,  press 'h'"), num_lines : 1, status: ConsoleMessageStatus::Normal},
-		cursor_idx : 0, 
+		cursor_idx : 0,
+		secondly_cursor_idx : None,
 		display_start: 0,
 		terminal_width : width as usize,
 		terminal_height : height as usize,
@@ -96,7 +100,7 @@ impl Viewer{
 	fn update_display_start(&mut self){
 		//区切り線の数
 		let separator_size : usize = 2;
-		
+
 		//display_startからカーソルのインデックスまでの行数を計算
 		let mut num_display_lines : usize = 0;
 		for i in self.display_start..=self.cursor_idx{
@@ -131,58 +135,95 @@ impl Viewer{
 
 	//カーソル操作----------------------------------------------------------------------------------
 
-	pub fn cursor_down(&mut self){
+	pub fn cursor_down(&mut self) -> Result<()>{
 
 		if self.cursor_idx == (self.texts.len() - 1){
-			return
+			return Err(anyhow::anyhow!("reach to bottom"));
 		}
 		self.cursor_idx += 1;
+		Ok(())
 	}
 
-	pub fn cursor_up(&mut self){
+	pub fn cursor_up(&mut self) -> Result<()>{
+
 		if self.cursor_idx == 0{
-			return
+			return Err(anyhow::anyhow!("reach to top"));
 		}
 		self.cursor_idx -= 1;
+		Ok(())
 	}
 
-	pub fn cursor_jump_down(&mut self){
+	pub fn cursor_jump_down(&mut self) -> Result<()>{
 
-		let current_rank = &self.texts[self.cursor_idx].rank;
+		let current_rank = self.texts[self.cursor_idx].rank;
 
 		loop {
-			if self.cursor_idx == (self.texts.len() - 1){
-				return
-			}
-			self.cursor_idx += 1;
-
-			if &self.texts[self.cursor_idx].rank < current_rank{
+			self.cursor_down()?;
+			if self.texts[self.cursor_idx].rank < current_rank{
 				break
 			}
 		}
+		Ok(())
 	}
 
-	pub fn cursor_jump_up(&mut self){
+	pub fn cursor_jump_up(&mut self) -> Result<()>{
 
-		let current_rank = &self.texts[self.cursor_idx].rank;
+		let current_rank = self.texts[self.cursor_idx].rank;
 
 		loop {
-			if self.cursor_idx == 0{
-				return
-			}
-			self.cursor_idx -= 1;
-
-			if &self.texts[self.cursor_idx].rank < current_rank{
+			self.cursor_up()?;
+			if self.texts[self.cursor_idx].rank < current_rank{
 				break
 			}
 		}
+		Ok(())
+	}
+
+	//-----------------------------------------------------------
+
+	pub fn activate_secondly_cursor(&mut self) -> Result<()>{
+		self.secondly_cursor_idx = Some(self.cursor_idx);
+		Ok(())
+	}
+
+	pub fn deactivate_secondly_cursor(&mut self) -> Result<()> {
+		self.secondly_cursor_idx = None;
+		Ok(())
+	}
+	
+	pub fn secondly_cursor_down(&mut self) -> Result<()>{
+		
+		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+
+		if current_idx == (self.texts.len() - 1){
+			return Err(anyhow::anyhow!("reach to bottom"));
+		}
+		self.secondly_cursor_idx = Some(current_idx + 1);
+		Ok(())
+	}
+
+	pub fn secondly_cursor_up(&mut self) -> Result<()>{
+
+		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+
+		if current_idx == 0{
+			return Err(anyhow::anyhow!("reach to top"));
+		}
+		self.secondly_cursor_idx = Some(current_idx - 1);
+		Ok(())
+	}
+
+	pub fn get_secondly_cursor_route(&self) -> Result<VecDeque<usize>>{
+		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+		let route = self.texts[idx].route.clone();
+		return Ok(route)
 	}
 
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
-	pub fn get_cursor_route(&self) -> VecDeque<usize>{
+	pub fn get_cursor_route(&self) -> Result<VecDeque<usize>>{
 		let idx = self.cursor_idx;
 		let route = self.texts[idx].route.clone();
-		return route
+		return Ok(route)
 	}
 
 	pub fn get_cursor_node_type(&self) -> NodeType{
@@ -193,10 +234,18 @@ impl Viewer{
 	}
 
 	//display用の関数もろもろ-----------------------------------------------------------
-	fn get_display_color(&self, idx : &usize, cursor_idx : &usize) -> String{
+	fn get_display_color(&self, idx : &usize) -> String{
 		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
-		let color = if idx == cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
-					else { color::WHITE.to_string() };
+
+		let color = match self.secondly_cursor_idx {
+			None	=> {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+					 	else { color::WHITE.to_string()}}
+
+			Some(v) => {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+						else if *idx == v { format!("{}{}",color::UNDERLINE,color::GREEN) }
+						else { color::WHITE.to_string() }}
+		};
+
 		return color
 	}
 	fn get_indent(&self, rank : &usize) -> String{
@@ -238,10 +287,8 @@ impl Viewer{
 						_line.push_str(&format!("{}{}", &indent, &color));
 
 						//フォルダ名の先頭につける矢印
-						let _arrow = 
-						if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
-						else{ "  " };
-
+						let _arrow = if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
+									 else{ "  " };
 						_line.push_str(&format!("{}{}{}{}", _arrow, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
 					}
 				}
@@ -268,7 +315,7 @@ impl Viewer{
 		let mut line_counter :usize = 0;
 		loop{
 
-			let _color 		= self.get_display_color(&i, &self.cursor_idx);
+			let _color 		= self.get_display_color(&i);
 			let _indent 	= self.get_indent(&self.texts[i].rank);
 			let _num_lines 	= self.texts[i].num_lines;
 
@@ -296,6 +343,7 @@ impl Viewer{
 		
 		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-&self.console_msg.num_lines-1) as u16),
 			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
+
 		let console_msg = match self.console_msg.status{
 			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
 			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
@@ -303,7 +351,7 @@ impl Viewer{
 		queue!(stdout(), Print(console_msg))?;
 
 		stdout().flush()?;
-		
+
 		Ok(())
 	}
 }
