@@ -129,10 +129,10 @@ impl Node{
         return _path
     }
 
-    pub fn update(&mut self, route : VecDeque<usize>){
+    pub fn update_node(&mut self, route : VecDeque<usize>){
 
         self.open_node(route.clone());
-        self.open_node(route.clone())
+        self.open_node(route.clone());
     }
 
     //-----------------------------------------------------------------------------------------

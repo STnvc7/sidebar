@@ -2,30 +2,10 @@ use std::path::PathBuf;
 
 use crossterm::event::{read, Event, KeyCode};
 use duct::cmd;
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::node::{Node};
 use crate::viewer::{Viewer, ConsoleMessageStatus};
-
-
-pub enum Commands{
-    Quit,
-    Up,
-    Down,
-    JumpUp,
-    JumpDown,
-    ShowPath,
-    Update,
-    Copy,
-    Move,
-    Rename,
-    NewFile,
-    NewFolder,
-    OpenFile,
-    OpenFolder,
-    Resize,
-    Help,
-}
 
 pub fn cursor_up(viewer : &mut Viewer) -> Result<()> {
 
@@ -53,7 +33,7 @@ pub fn cursor_jump_down(viewer : &mut Viewer) -> Result<()> {
 
 pub fn show_path(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let path = tree.get_path(route).to_string_lossy().into_owned();
     viewer.set_console_msg(path, ConsoleMessageStatus::Normal);
     Ok(())
@@ -61,7 +41,7 @@ pub fn show_path(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
 pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
 
-    let mut route = viewer.get_cursor_route();
+    let mut route = viewer.get_cursor_route()?;
 
     loop {
         if route.len() == 0{
@@ -77,7 +57,7 @@ pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
         }
     }
 
-    tree.update(route);
+    tree.update_node(route.clone());
     Ok(())
 }
 
@@ -87,13 +67,33 @@ pub fn copy() -> Result<()> {
 
 pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
-    let original_path = tree.get_path(route);
-    let new_path = get_path_from_secondly_cursor(tree, viewer)?;
-    
-    viewer.init_secondly_cursor()?;
-    Ok(())
+    viewer.activate_secondly_cursor()?;
 
+    let route = viewer.get_cursor_route()?;
+    let original_path = tree.get_path(route);
+    let file_name_osstr = &original_path.file_name().context("coudln't get filename")?;
+    let file_name_str = file_name_osstr.to_str().context("coudln't convert OsStr to &str")?;
+
+    let mut destination = get_path_from_secondly_cursor(tree, viewer)?;
+
+    if destination.is_file() {
+        destination = (*destination.parent().unwrap()).to_path_buf();
+    }
+
+    let new_file_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
+
+    let result = cmd!("mv", original_path, new_file_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!("coudln't move..."));}
+    }
+
+    update(tree, viewer)?;
+
+    viewer.deactivate_secondly_cursor()?;
+
+    Ok(())
 }
 
 pub fn help(viewer : &mut Viewer) -> Result<()> {
@@ -106,7 +106,7 @@ pub fn help(viewer : &mut Viewer) -> Result<()> {
 
 pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let original_path = tree.get_path(route);
 
     let console_msg_head = String::from("Rename to : ");
@@ -131,7 +131,7 @@ pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
 pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let mut parent_path = tree.get_path(route);
 
     let console_msg_head = String::from("Enter filename : ");
@@ -150,7 +150,7 @@ pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
     let result = cmd!("touch", new_file_path_string.clone()).stderr_capture().run();
 
     match result{
-        Ok(_)   => {viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
         Err(_)  => { return Err(anyhow::anyhow!("coudln't make file..."));}
     }
 
@@ -161,7 +161,7 @@ pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
 
 pub fn new_folder(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let mut parent_path = tree.get_path(route);
 
     let console_msg_head = String::from("Enter folder name : ");
@@ -192,7 +192,7 @@ pub fn new_folder(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
 pub fn open_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
-    let route = viewer.get_cursor_route();
+    let route = viewer.get_cursor_route()?;
     let path = tree.get_path(route);
     
     let result = cmd!("rmate", path).stderr_capture().run();
@@ -207,7 +207,7 @@ pub fn open_file(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
 pub fn open_folder(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
 
-    let _route = viewer.get_cursor_route();
+    let _route = viewer.get_cursor_route()?;
     tree.open_node(_route);
     Ok(())
 }
@@ -250,26 +250,23 @@ fn type_from_console_stdin(viewer : &mut Viewer, console_msg_head : String) -> R
 
 fn get_path_from_secondly_cursor(tree: &Box<Node>, viewer : &mut Viewer) -> Result<PathBuf>{
 
-    let path : PathBuf;
-    loop{
+    let path_result = loop{
         let _event = read()?;
         match _event{
             Event::Key(_e) =>{
                 match _e.code{
                     KeyCode::Down    => {let _ = viewer.secondly_cursor_down();},
                     KeyCode::Up      => {let _ = viewer.secondly_cursor_up();},
-                    KeyCode::Enter   => {let _route = viewer.get_cursor_route();
-                                         path = tree.get_path(_route);
-                                         break},
-                    KeyCode::Esc     => {return Err(anyhow::anyhow!("aborted"))}
+                    KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
+                                         break Ok(tree.get_path(_route))},
+                    KeyCode::Esc     => {break Err(anyhow::anyhow!("aborted"));}
                    _ => {}
                 }
             },
             _ => {}
         }
         viewer.display()?;
-    }
-
-    Ok(path)
-
+    };
+    
+    return path_result
 }

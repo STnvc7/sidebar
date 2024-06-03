@@ -5,7 +5,8 @@ use crossterm::{cursor, queue, terminal};
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
-use anyhow::Result;
+
+use anyhow::{Context, Result};
 
 use crate::color;
 use crate::node::NodeType;
@@ -59,7 +60,7 @@ pub struct Viewer{
 	texts : VecDeque<TextElement>,
 	console_msg : ConsoleMessage, 
 	cursor_idx	  : usize,
-	secondly_cursor_idx : usize,
+	secondly_cursor_idx : Option<usize>,
 	display_start : usize,
 	terminal_width : usize,
 	terminal_height : usize,
@@ -71,7 +72,7 @@ pub fn new() -> Viewer{
 		texts: VecDeque::new(),
 		console_msg : ConsoleMessage{message : String::from("to see help,  press 'h'"), num_lines : 1, status: ConsoleMessageStatus::Normal},
 		cursor_idx : 0,
-		secondly_cursor_idx : 0,
+		secondly_cursor_idx : None,
 		display_start: 0,
 		terminal_width : width as usize,
 		terminal_height : height as usize,
@@ -140,7 +141,6 @@ impl Viewer{
 			return Err(anyhow::anyhow!("reach to bottom"));
 		}
 		self.cursor_idx += 1;
-		self.secondly_cursor_idx += 1;
 		Ok(())
 	}
 
@@ -150,7 +150,6 @@ impl Viewer{
 			return Err(anyhow::anyhow!("reach to top"));
 		}
 		self.cursor_idx -= 1;
-		self.secondly_cursor_idx -= 1;
 		Ok(())
 	}
 
@@ -182,34 +181,49 @@ impl Viewer{
 
 	//-----------------------------------------------------------
 
-	pub fn init_secondly_cursor(&mut self) -> Result<()>{
-		self.secondly_cursor_idx = self.cursor_idx;
+	pub fn activate_secondly_cursor(&mut self) -> Result<()>{
+		self.secondly_cursor_idx = Some(self.cursor_idx);
+		Ok(())
+	}
+
+	pub fn deactivate_secondly_cursor(&mut self) -> Result<()> {
+		self.secondly_cursor_idx = None;
 		Ok(())
 	}
 	
 	pub fn secondly_cursor_down(&mut self) -> Result<()>{
+		
+		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
 
-		if self.secondly_cursor_idx == (self.texts.len() - 1){
+		if current_idx == (self.texts.len() - 1){
 			return Err(anyhow::anyhow!("reach to bottom"));
 		}
-		self.secondly_cursor_idx += 1;
+		self.secondly_cursor_idx = Some(current_idx + 1);
 		Ok(())
 	}
 
 	pub fn secondly_cursor_up(&mut self) -> Result<()>{
 
-		if self.secondly_cursor_idx == 0{
+		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+
+		if current_idx == 0{
 			return Err(anyhow::anyhow!("reach to top"));
 		}
-		self.secondly_cursor_idx -= 1;
+		self.secondly_cursor_idx = Some(current_idx - 1);
 		Ok(())
 	}
 
+	pub fn get_secondly_cursor_route(&self) -> Result<VecDeque<usize>>{
+		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+		let route = self.texts[idx].route.clone();
+		return Ok(route)
+	}
+
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
-	pub fn get_cursor_route(&self) -> VecDeque<usize>{
+	pub fn get_cursor_route(&self) -> Result<VecDeque<usize>>{
 		let idx = self.cursor_idx;
 		let route = self.texts[idx].route.clone();
-		return route
+		return Ok(route)
 	}
 
 	pub fn get_cursor_node_type(&self) -> NodeType{
@@ -222,9 +236,16 @@ impl Viewer{
 	//display用の関数もろもろ-----------------------------------------------------------
 	fn get_display_color(&self, idx : &usize) -> String{
 		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
-		let color = if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
-					else if *idx == self.secondly_cursor_idx { format!("{}{}",color::UNDERLINE,color::GREEN) }
-					else { color::WHITE.to_string() };
+
+		let color = match self.secondly_cursor_idx {
+			None	=> {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+					 	else { color::WHITE.to_string()}}
+
+			Some(v) => {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
+						else if *idx == v { format!("{}{}",color::UNDERLINE,color::GREEN) }
+						else { color::WHITE.to_string() }}
+		};
+
 		return color
 	}
 	fn get_indent(&self, rank : &usize) -> String{
