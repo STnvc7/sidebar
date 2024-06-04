@@ -10,6 +10,7 @@ use crate::node::{NodeType};
 use crate::viewer;
 use crate::viewer::{ConsoleMessageStatus};
 use crate::command;
+use crate::error::ApplicationError;
 
 pub fn run(path : &Option<String>) -> Result<()>{
 
@@ -66,7 +67,7 @@ pub fn run(path : &Option<String>) -> Result<()>{
                     KeyEvent{code:KeyCode::Down,modifiers:_,kind:_,state:_}       =>  command::cursor_down(&mut viewer),                     //カーソルを下に移動
                     KeyEvent{code:KeyCode::Up,modifiers:_,kind:_,state:_}         =>  command::cursor_up(&mut viewer),                       //カーソルを上に移動
 
-                    KeyEvent{code:KeyCode::Char(c),modifiers:_,kind:_,state:_}    => Err(anyhow::anyhow!(format!("{} is invalid command", c))),
+                    KeyEvent{code:KeyCode::Char(_),modifiers:_,kind:_,state:_}    => Err(anyhow::anyhow!(ApplicationError::InvalidCommandError)),
                     _ => Err(anyhow::anyhow!("no covered key")),
                 }        
             }

@@ -9,6 +9,8 @@ use anyhow::{Context, Result};
 
 use crate::node::{Node};
 use crate::viewer::{Viewer, ConsoleMessageStatus};
+use crate::error::ApplicationError;
+use crate::color;
 
 pub fn cursor_up(viewer : &mut Viewer) -> Result<()> {
 
@@ -101,7 +103,7 @@ pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
 
 pub fn help() -> Result<()> {
 
-    execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0))?;
+    queue!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), style::Print(color::RESET))?;
 
     let help_msg = vec![
         "'h'        : Show help",
