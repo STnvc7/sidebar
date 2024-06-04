@@ -1,6 +1,9 @@
 use std::path::PathBuf;
+use std::io::{stdout, Write};
 
-use crossterm::event::{read, Event, KeyCode};
+use crossterm::event::{read, Event, KeyEvent, KeyCode};
+use crossterm::{cursor, execute, queue, style, terminal};
+
 use duct::cmd;
 use anyhow::{Context, Result};
 
@@ -96,10 +99,46 @@ pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
     Ok(())
 }
 
-pub fn help(viewer : &mut Viewer) -> Result<()> {
+pub fn help() -> Result<()> {
 
-    let _help_msg = String::from("'h' : help, 'q' : quit, 'Enter' : open file or folder, 'p' : show path, 'r' : rename, 'n' : new file, 'N' : new folder");
-    viewer.set_console_msg(_help_msg, ConsoleMessageStatus::Normal);
+    execute!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0))?;
+
+    let help_msg = vec![
+        "'h'        : Show help",
+        "'q'/Esc    : Quit application",
+        "↑          : Cursor up",
+        "↓          : Curosr down",
+        "Shift+↑    : Cursor jump up",
+        "Shift+↓    : Curosr jump down",
+        "'p'        : Show file/folder path",
+        "Enter      : Open file/folder",
+        "'n'        : New file",
+        "Shift+'n'  : New folder",
+        "'r'        : Rename",
+        "'m'        : Move",
+        ];
+
+    for line in help_msg.iter(){
+        queue!(stdout(), style::Print("> "), style::Print(line), cursor::MoveToNextLine(1))?;
+    }
+
+    queue!(stdout(), cursor::MoveToNextLine(1), style::Print("Press 'q'/Esc to exit help"), cursor::MoveToNextLine(1))?;
+
+    stdout().flush()?;
+
+    loop{
+        let _event = read()?;
+        match _event{
+            Event::Key(e) =>{
+                match e{
+                    KeyEvent{code:KeyCode::Char('q'),modifiers:_,kind:_,state:_}  =>  {break;},
+                    KeyEvent{code:KeyCode::Esc,modifiers:_,kind:_,state:_}        =>  {break;},
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
 
     Ok(())
 }
