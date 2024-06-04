@@ -70,7 +70,7 @@ pub fn new() -> Viewer{
 	let (width, height) = terminal::size().unwrap();
 	return Viewer{
 		texts: VecDeque::new(),
-		console_msg : ConsoleMessage{message : String::from("to see help,  press 'h'"), num_lines : 1, status: ConsoleMessageStatus::Normal},
+		console_msg : ConsoleMessage{message : String::new(), num_lines : 1, status: ConsoleMessageStatus::Normal},
 		cursor_idx : 0,
 		secondly_cursor_idx : None,
 		display_start: 0,
