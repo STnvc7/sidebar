@@ -14,10 +14,10 @@ use crate::file_icon::get_file_icon;
 
 
 //表示がスクロールされる際のカーソルの余白(?)説明が下手
-const SCROLL_MARGIN : usize = 2;
+pub const SCROLL_MARGIN : usize = 2;
 
 //表示の際の右の余白
-const RIGHT_MARGIN : usize = 2;
+pub const RIGHT_MARGIN : usize = 2;
 
 
 
@@ -79,11 +79,11 @@ pub fn new() -> Viewer{
 	}
 }
 
-pub fn get_num_lines(text : &String, left_margin : &usize) -> usize{
+pub fn get_num_lines(text : &String, left_margin : &usize, right_margin : &usize) -> usize{
 
 	let length = text.len();
 	let (terminal_width, _) = terminal::size().unwrap();
-	let width = terminal_width as usize - RIGHT_MARGIN - left_margin;
+	let width = terminal_width as usize - right_margin - left_margin;
 	let num_lines = length.div_ceil(width);
 
 	return num_lines
@@ -119,7 +119,7 @@ impl Viewer{
 	}
 
 	pub fn set_console_msg(&mut self, console_msg: String, status : ConsoleMessageStatus){
-		let _num_lines = get_num_lines(&console_msg, &0);
+		let _num_lines = get_num_lines(&console_msg, &0, &RIGHT_MARGIN);
 		self.console_msg = ConsoleMessage{ message : console_msg, num_lines : _num_lines, status : status};
 	}
 

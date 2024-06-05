@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 
-use crate::viewer::{TextElement, get_num_lines};
+use crate::viewer::{TextElement, get_num_lines, RIGHT_MARGIN};
 
 pub enum NodeType{
     Folder,
@@ -204,12 +204,12 @@ impl Node{
         let _is_opened   = self.opened;
         let output_elem =  match self.node_type{
             NodeType::Folder => {
-                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
                 TextElement{ text : _name, num_lines : _num_lines,
                              node_type : NodeType::Folder, is_opened : _is_opened, rank : rank, route : route}}
 
             NodeType::File   => {
-                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
                 TextElement{ text : _name, num_lines : _num_lines,
                              node_type : NodeType::File, is_opened : false, rank : rank, route : route}}
         };
