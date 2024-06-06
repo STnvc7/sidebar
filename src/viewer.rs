@@ -181,14 +181,12 @@ impl Viewer{
 
 	//-----------------------------------------------------------
 
-	pub fn activate_secondly_cursor(&mut self) -> Result<()>{
+	pub fn activate_secondly_cursor(&mut self){
 		self.secondly_cursor_idx = Some(self.cursor_idx);
-		Ok(())
 	}
 
-	pub fn deactivate_secondly_cursor(&mut self) -> Result<()> {
+	pub fn deactivate_secondly_cursor(&mut self) {
 		self.secondly_cursor_idx = None;
-		Ok(())
 	}
 	
 	pub fn secondly_cursor_down(&mut self) -> Result<()>{
@@ -219,11 +217,20 @@ impl Viewer{
 		return Ok(route)
 	}
 
+	pub fn get_secondly_cursor_node_type(&self) -> Result<NodeType>{
+		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+
+		match self.texts[idx].node_type{
+			NodeType::Folder => {Ok(NodeType::Folder)}
+			NodeType::File   => {Ok(NodeType::File)}
+		}
+	}
+
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
-	pub fn get_cursor_route(&self) -> Result<VecDeque<usize>>{
+	pub fn get_cursor_route(&self) -> VecDeque<usize>{
 		let idx = self.cursor_idx;
 		let route = self.texts[idx].route.clone();
-		return Ok(route)
+		return route
 	}
 
 	pub fn get_cursor_node_type(&self) -> NodeType{

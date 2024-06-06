@@ -131,12 +131,13 @@ impl Node{
 
     pub fn update_node(&mut self, route : VecDeque<usize>){
 
-        self.open_node(route.clone());
-        self.open_node(route.clone());
+        let open_only = false;
+        self.open_node(route.clone(), open_only);
+        self.open_node(route.clone(), open_only);
     }
 
     //-----------------------------------------------------------------------------------------
-    pub fn open_node(&mut self, mut route: VecDeque<usize>){
+    pub fn open_node(&mut self, mut route: VecDeque<usize>, open_only : bool){
         //route : 現在選択されているノードの経路
 
         let result = route.pop_front();
@@ -167,12 +168,15 @@ impl Node{
                 }
             }
             else {
+                if open_only{
+                    return
+                }
                 self.childs[poped_node_idx].set_opened_all(false);
             }
             return
         }
 
-        self.childs[poped_node_idx].open_node(route.clone());
+        self.childs[poped_node_idx].open_node(route.clone(), open_only);
         return
     }
 
