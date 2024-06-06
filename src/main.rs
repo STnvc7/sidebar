@@ -4,6 +4,7 @@ mod viewer;
 mod color;
 mod file_icon;
 mod command;
+mod error;
 
 use std::io::stdout;
 use std::env;

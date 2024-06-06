@@ -14,10 +14,10 @@ use crate::file_icon::get_file_icon;
 
 
 //表示がスクロールされる際のカーソルの余白(?)説明が下手
-const SCROLL_MARGIN : usize = 2;
+pub const SCROLL_MARGIN : usize = 2;
 
 //表示の際の右の余白
-const RIGHT_MARGIN : usize = 2;
+pub const RIGHT_MARGIN : usize = 2;
 
 
 
@@ -79,11 +79,11 @@ pub fn new() -> Viewer{
 	}
 }
 
-pub fn get_num_lines(text : &String, left_margin : &usize) -> usize{
+pub fn get_num_lines(text : &String, left_margin : &usize, right_margin : &usize) -> usize{
 
 	let length = text.len();
 	let (terminal_width, _) = terminal::size().unwrap();
-	let width = terminal_width as usize - RIGHT_MARGIN - left_margin;
+	let width = terminal_width as usize - right_margin - left_margin;
 	let num_lines = length.div_ceil(width);
 
 	return num_lines
@@ -119,7 +119,7 @@ impl Viewer{
 	}
 
 	pub fn set_console_msg(&mut self, console_msg: String, status : ConsoleMessageStatus){
-		let _num_lines = get_num_lines(&console_msg, &0);
+		let _num_lines = get_num_lines(&console_msg, &0, &RIGHT_MARGIN);
 		self.console_msg = ConsoleMessage{ message : console_msg, num_lines : _num_lines, status : status};
 	}
 
@@ -181,14 +181,12 @@ impl Viewer{
 
 	//-----------------------------------------------------------
 
-	pub fn activate_secondly_cursor(&mut self) -> Result<()>{
+	pub fn activate_secondly_cursor(&mut self){
 		self.secondly_cursor_idx = Some(self.cursor_idx);
-		Ok(())
 	}
 
-	pub fn deactivate_secondly_cursor(&mut self) -> Result<()> {
+	pub fn deactivate_secondly_cursor(&mut self) {
 		self.secondly_cursor_idx = None;
-		Ok(())
 	}
 	
 	pub fn secondly_cursor_down(&mut self) -> Result<()>{
@@ -219,11 +217,20 @@ impl Viewer{
 		return Ok(route)
 	}
 
+	pub fn get_secondly_cursor_node_type(&self) -> Result<NodeType>{
+		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
+
+		match self.texts[idx].node_type{
+			NodeType::Folder => {Ok(NodeType::Folder)}
+			NodeType::File   => {Ok(NodeType::File)}
+		}
+	}
+
 	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
-	pub fn get_cursor_route(&self) -> Result<VecDeque<usize>>{
+	pub fn get_cursor_route(&self) -> VecDeque<usize>{
 		let idx = self.cursor_idx;
 		let route = self.texts[idx].route.clone();
-		return Ok(route)
+		return route
 	}
 
 	pub fn get_cursor_node_type(&self) -> NodeType{

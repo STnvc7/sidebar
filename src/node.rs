@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 
-use crate::viewer::{TextElement, get_num_lines};
+use crate::viewer::{TextElement, get_num_lines, RIGHT_MARGIN};
 
 pub enum NodeType{
     Folder,
@@ -131,12 +131,13 @@ impl Node{
 
     pub fn update_node(&mut self, route : VecDeque<usize>){
 
-        self.open_node(route.clone());
-        self.open_node(route.clone());
+        let open_only = false;
+        self.open_node(route.clone(), open_only);
+        self.open_node(route.clone(), open_only);
     }
 
     //-----------------------------------------------------------------------------------------
-    pub fn open_node(&mut self, mut route: VecDeque<usize>){
+    pub fn open_node(&mut self, mut route: VecDeque<usize>, open_only : bool){
         //route : 現在選択されているノードの経路
 
         let result = route.pop_front();
@@ -167,12 +168,15 @@ impl Node{
                 }
             }
             else {
+                if open_only{
+                    return
+                }
                 self.childs[poped_node_idx].set_opened_all(false);
             }
             return
         }
 
-        self.childs[poped_node_idx].open_node(route.clone());
+        self.childs[poped_node_idx].open_node(route.clone(), open_only);
         return
     }
 
@@ -204,12 +208,12 @@ impl Node{
         let _is_opened   = self.opened;
         let output_elem =  match self.node_type{
             NodeType::Folder => {
-                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
                 TextElement{ text : _name, num_lines : _num_lines,
                              node_type : NodeType::Folder, is_opened : _is_opened, rank : rank, route : route}}
 
             NodeType::File   => {
-                let _num_lines = get_num_lines(&_name, &(&rank*2));
+                let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
                 TextElement{ text : _name, num_lines : _num_lines,
                              node_type : NodeType::File, is_opened : false, rank : rank, route : route}}
         };
