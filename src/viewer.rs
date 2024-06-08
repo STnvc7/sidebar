@@ -93,6 +93,9 @@ impl Viewer{
 
 	//-----------------------------------------------------------------------------------------
 	pub fn set_text(&mut self, text: VecDeque<TextElement>){
+		if text.len() - 1 < self.cursor_idx{
+			self.cursor_idx = text.len() - 1;
+		}
 		self.texts = text;
 		self.update_display_start();
 	}
