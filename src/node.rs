@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 
-use crate::viewer::{TextElement, get_num_lines, RIGHT_MARGIN};
+use crate::viewer::{TextElement, new_element, get_num_lines, RIGHT_MARGIN};
 
 pub enum NodeType{
     Folder,
@@ -129,6 +129,10 @@ impl Node{
         return _path
     }
 
+    // fn get_open_status(&self) -> VecDeque<usize>{
+
+
+    // }
     pub fn update_node(&mut self, route : VecDeque<usize>){
 
         let open_only = false;
@@ -206,16 +210,15 @@ impl Node{
         let _name        = self.name.to_string();
         let _path        = self.path.clone();
         let _is_opened   = self.opened;
-        let output_elem =  match self.node_type{
+
+        let output_elem : TextElement;
+        match self.node_type{
             NodeType::Folder => {
                 let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
-                TextElement{ text : _name, num_lines : _num_lines,
-                             node_type : NodeType::Folder, is_opened : _is_opened, rank : rank, route : route}}
-
+                output_elem = new_element(_name, _num_lines, NodeType::Folder, _is_opened, rank, route);},
             NodeType::File   => {
                 let _num_lines = get_num_lines(&_name, &(&rank*2), &RIGHT_MARGIN);
-                TextElement{ text : _name, num_lines : _num_lines,
-                             node_type : NodeType::File, is_opened : false, rank : rank, route : route}}
+                output_elem = new_element(_name, _num_lines, NodeType::File, false, rank, route)}
         };
         _output.push_front(output_elem);
 

@@ -79,6 +79,14 @@ pub fn new() -> Viewer{
 	}
 }
 
+pub fn new_element(text : String, num_lines : usize, node_type : NodeType,
+				   is_opened : bool, rank : usize, route : VecDeque<usize>) -> TextElement{
+	
+	let elem =  TextElement{ text : text, num_lines : num_lines, node_type : node_type, is_opened : is_opened,
+							 rank : rank, route : route};
+	return elem
+}
+
 pub fn get_num_lines(text : &String, left_margin : &usize, right_margin : &usize) -> usize{
 
 	let length = text.len();

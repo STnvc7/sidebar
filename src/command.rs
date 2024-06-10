@@ -66,7 +66,29 @@ pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
     Ok(())
 }
 
-pub fn copy() -> Result<()> {
+pub fn copy(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
+
+    let route = viewer.get_cursor_route();
+    let original_path = tree.get_path(route);
+    let file_name_osstr = &original_path.file_name().context("coudln't get filename")?;
+    let file_name_str = file_name_osstr.to_str().context("coudln't convert OsStr to &str")?;
+
+    let mut destination = get_path_from_secondly_cursor(tree, viewer)?;
+
+    if destination.is_file() {
+        destination = (*destination.parent().unwrap()).to_path_buf();
+    }
+
+    let new_file_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
+
+    let result = cmd!("cp", original_path, new_file_path_string.clone()).stderr_capture().run();
+
+    match result{
+        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("cp")))) }
+    }
+
+    update(tree, viewer)?;
     Ok(())
 }
 
