@@ -55,11 +55,13 @@ pub fn run(path : &Option<String>) -> Result<()>{
                     KeyEvent{code:KeyCode::Char('N'),modifiers:_,kind:_,state:_}                =>  command::new_folder(&mut tree, &mut viewer),
                     KeyEvent{code:KeyCode::Char('r'),modifiers:_,kind:_,state:_}                =>  command::rename(&mut tree, &mut viewer),
                     KeyEvent{code:KeyCode::Char('m'),modifiers:_,kind:_,state:_}                =>  command::move_to(&mut tree, &mut viewer),
+                    KeyEvent{code:KeyCode::Char('c'),modifiers:_,kind:_,state:_}                =>  command::copy(&mut tree, &mut viewer),
                     KeyEvent{code:KeyCode::Enter,modifiers:_,kind:_,state:_}                    =>  command::open_file(&tree, &viewer),
                     KeyEvent{code:KeyCode::Tab,modifiers:_,kind:_,state:_}                      =>  command::open_folder(&mut tree, &viewer),
                     KeyEvent{code:KeyCode::Down,modifiers:KeyModifiers::SHIFT,kind:_,state:_}   =>  command::cursor_jump_down(&mut viewer),
                     KeyEvent{code:KeyCode::Up,modifiers:KeyModifiers::SHIFT,kind:_,state:_}     =>  command::cursor_jump_up(&mut viewer),
                     KeyEvent{code:KeyCode::Left,modifiers:_,kind:_,state:_}                     =>  command::cursor_jump_up(&mut viewer),
+                    KeyEvent{code:KeyCode::Right,modifiers:_,kind:_,state:_}                    =>  command::cursor_jump_down(&mut viewer),
                     KeyEvent{code:KeyCode::Down,modifiers:_,kind:_,state:_}                     =>  command::cursor_down(&mut viewer),
                     KeyEvent{code:KeyCode::Up,modifiers:_,kind:_,state:_}                       =>  command::cursor_up(&mut viewer),
 
