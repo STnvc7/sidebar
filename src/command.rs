@@ -343,13 +343,21 @@ fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> 
         match _event{
             Event::Key(_e) =>{
                 match _e.code{
-                    KeyCode::Down    => {let _ = viewer.secondly_cursor_down();},
-                    KeyCode::Up      => {let _ = viewer.secondly_cursor_up();},
+                    KeyCode::Down    => {let _ = viewer.secondly_cursor_down();
+                                         let _text = tree.format();
+                                         viewer.set_text(_text)
+                                        },
+                    KeyCode::Up      => {let _ = viewer.secondly_cursor_up();
+                                         let _text = tree.format();
+                                         viewer.set_text(_text)
+                                        },
                     KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
-                                         break Ok(tree.get_path(_route))},
+                                         break Ok(tree.get_path(_route))
+                                        },
                     KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;
                                          let _text = tree.format();
-                                         viewer.set_text(_text);}
+                                         viewer.set_text(_text);
+                                        }
                     KeyCode::Esc     => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
                     KeyCode::Char('q') => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
                    _ => {}
