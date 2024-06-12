@@ -129,10 +129,23 @@ impl Node{
         return _path
     }
 
-    // fn get_open_status(&self) -> VecDeque<usize>{
+    // fn get_open_status(&self, route : VecDeque<usize>) -> Vec<VecDeque<usize>>{
 
+    //     routes = Vec::new();
+
+    //     for (i, child) in self.childs.iter().enumerate(){
+    //         if child.opened{
+    //             let mut new_route = route.clone();
+    //             new_route.push_back(i as usize);
+    //             let mut _route = child.get_open_status(new_route);
+    //             routes.append(_route);
+    //         }
+    //     }
+
+    //     return routes
 
     // }
+
     pub fn update_node(&mut self, route : VecDeque<usize>){
 
         let open_only = false;
@@ -187,11 +200,11 @@ impl Node{
     //-----------------------------------------------------------------------------------------
     //木の出力用のString型のVecDequeを返す
     pub fn format(&self) -> VecDeque<TextElement> {
-        let texts = self.format_for_textline(0, VecDeque::new());
+        let texts = self.format_for_viewer(0, VecDeque::new());
         return texts
     }
 
-    fn format_for_textline(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
+    fn format_for_viewer(&self, rank : usize, route: VecDeque<usize>) -> VecDeque<TextElement>{
 
         let mut _output = VecDeque::new();
 
@@ -200,7 +213,7 @@ impl Node{
 
                 let mut new_route = route.clone();
                 new_route.push_back(i as usize);
-                let mut _child_elem = child.format_for_textline(rank+1, new_route);
+                let mut _child_elem = child.format_for_viewer(rank+1, new_route);
 
                 _output.append(&mut _child_elem);
             }

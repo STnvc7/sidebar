@@ -112,9 +112,14 @@ impl Viewer{
 		//区切り線の数
 		let separator_size : usize = 2;
 
+		let valid_cursor_idx = match self.secondly_cursor_idx{
+			Some(v) => v,
+			None	=> self.cursor_idx,
+		};
+
 		//display_startからカーソルのインデックスまでの行数を計算
 		let mut num_display_lines : usize = 0;
-		for i in self.display_start..=self.cursor_idx{
+		for i in self.display_start..= valid_cursor_idx{
 			num_display_lines += self.texts[i].num_lines;
 		}
 
@@ -124,8 +129,8 @@ impl Viewer{
 		}
 
 		//スクロールアップするときの処理
-		if self.cursor_idx >= SCROLL_MARGIN  && self.cursor_idx < (self.display_start + SCROLL_MARGIN){
-			self.display_start = self.cursor_idx - SCROLL_MARGIN;
+		if valid_cursor_idx >= SCROLL_MARGIN  && valid_cursor_idx < (self.display_start + SCROLL_MARGIN){
+			self.display_start = valid_cursor_idx - SCROLL_MARGIN;
 		}
 	}
 
