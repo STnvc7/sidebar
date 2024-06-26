@@ -357,6 +357,7 @@ fn type_from_console_stdin(viewer : &mut Viewer) -> Result<String>{
 fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> Result<PathBuf>{
 
     viewer.activate_secondly_cursor();
+    let mut new_path = String::new();
 
     let path_result = loop{
         let _event = read()?;
@@ -364,27 +365,28 @@ fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> 
             Event::Key(_e) =>{
                 match _e.code{
                     KeyCode::Down    => {let _ = viewer.secondly_cursor_down();
-                                         let _text = tree.format();
-                                         viewer.set_text(_text)
+                                         let _route = viewer.get_secondly_cursor_route()?;
+                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
                                         },
                     KeyCode::Up      => {let _ = viewer.secondly_cursor_up();
-                                         let _text = tree.format();
-                                         viewer.set_text(_text)
+                                         let _route = viewer.get_secondly_cursor_route()?;
+                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
                                         },
                     KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
                                          break Ok(tree.get_path(_route))
                                         },
-                    KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;
-                                         let _text = tree.format();
-                                         viewer.set_text(_text);
-                                        }
+                    KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;}
                     KeyCode::Esc     => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
-                    KeyCode::Char('q') => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
+                    KeyCode::Char(c) => {new_path.push(c);}
+                    KeyCode::Backspace  => {if new_path.len() != 0 {let _ = new_path.pop().unwrap();}}
                    _ => {}
                 }
             },
             _ => {}
         }
+        let _text = tree.format();
+        viewer.set_text(_text);
+        viewer.set_console_msg(new_path.clone(), ConsoleMessageStatus::Normal);
         viewer.display()?;
     };
     
@@ -392,3 +394,4 @@ fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> 
 
     return path_result
 }
+
