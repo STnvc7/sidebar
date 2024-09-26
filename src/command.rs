@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::io::{stdout, Write};
 
 use crossterm::event::{read, Event, KeyEvent, KeyCode};
@@ -79,12 +79,16 @@ pub fn copy(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
         destination = (*destination.parent().unwrap()).to_path_buf();
     }
 
-    let new_file_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
+    let new_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
 
-    let result = cmd!("cp", original_path, new_file_path_string.clone()).stderr_capture().run();
+    if Path::new(&new_path_string).exists(){
+        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
+    }
+
+    let result = cmd!("cp", "-r", "-n", original_path, new_path_string.clone()).stderr_capture().run();
 
     match result{
-        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
         Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("cp")))) }
     }
 
@@ -105,12 +109,16 @@ pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
         destination = (*destination.parent().unwrap()).to_path_buf();
     }
 
-    let new_file_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
+    let new_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
 
-    let result = cmd!("mv", original_path, new_file_path_string.clone()).stderr_capture().run();
+    if Path::new(&new_path_string).exists(){
+        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
+    }
+
+    let result = cmd!("mv", "-n", original_path, new_path_string.clone()).stderr_capture().run();
 
     match result{
-        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
+        Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
         Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("mv")))) }
     }
 
@@ -175,7 +183,11 @@ pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
     }
     let new_path_string = format!("{}/{}", (*original_path.parent().unwrap()).to_path_buf().to_string_lossy().into_owned(), new_name);
 
-    let result = cmd!("mv", original_path, new_path_string.clone()).stderr_capture().run();
+    if Path::new(&new_path_string).exists(){
+        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
+    }
+
+    let result = cmd!("mv","-n", original_path, new_path_string.clone()).stderr_capture().run();
 
     match result{
         Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
@@ -203,6 +215,10 @@ pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
         parent_path = (*parent_path.parent().unwrap()).to_path_buf();
     }
     let new_file_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_file_name);
+
+    if Path::new(&new_file_path_string).exists(){
+        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
+    }
 
     let result = cmd!("touch", new_file_path_string.clone()).stderr_capture().run();
 
@@ -232,6 +248,10 @@ pub fn new_folder(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
         parent_path = (*parent_path.parent().unwrap()).to_path_buf();
     }
     let new_folder_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_folder_name);
+
+    if Path::new(&new_folder_path_string).exists(){
+        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
+    }
 
     let result = cmd!("mkdir", new_folder_path_string.clone()).stderr_capture().run();
 
@@ -337,6 +357,7 @@ fn type_from_console_stdin(viewer : &mut Viewer) -> Result<String>{
 fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> Result<PathBuf>{
 
     viewer.activate_secondly_cursor();
+    let mut new_path = String::new();
 
     let path_result = loop{
         let _event = read()?;
@@ -344,27 +365,28 @@ fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> 
             Event::Key(_e) =>{
                 match _e.code{
                     KeyCode::Down    => {let _ = viewer.secondly_cursor_down();
-                                         let _text = tree.format();
-                                         viewer.set_text(_text)
+                                         let _route = viewer.get_secondly_cursor_route()?;
+                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
                                         },
                     KeyCode::Up      => {let _ = viewer.secondly_cursor_up();
-                                         let _text = tree.format();
-                                         viewer.set_text(_text)
+                                         let _route = viewer.get_secondly_cursor_route()?;
+                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
                                         },
                     KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
                                          break Ok(tree.get_path(_route))
                                         },
-                    KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;
-                                         let _text = tree.format();
-                                         viewer.set_text(_text);
-                                        }
+                    KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;}
                     KeyCode::Esc     => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
-                    KeyCode::Char('q') => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
+                    KeyCode::Char(c) => {new_path.push(c);}
+                    KeyCode::Backspace  => {if new_path.len() != 0 {let _ = new_path.pop().unwrap();}}
                    _ => {}
                 }
             },
             _ => {}
         }
+        let _text = tree.format();
+        viewer.set_text(_text);
+        viewer.set_console_msg(new_path.clone(), ConsoleMessageStatus::Normal);
         viewer.display()?;
     };
     
@@ -372,3 +394,4 @@ fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> 
 
     return path_result
 }
+
