@@ -1,3 +1,6 @@
 {
-	"open_editor_cmd" : "subl"
+	"editor_command": "subl",
+	"ignore": [".*"],
+	"export_variable_name": "CWD",
+	"nerd_font": true
 }

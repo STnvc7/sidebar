@@ -1,380 +1,301 @@
-use std::collections::VecDeque;
-use std::io::{stdout, Write};
+use crate::color as COLOR;
+use crate::icon;
+use crate::node::NodeType;
+use crate::node_map::NodeMap;
+use crate::config::Config;
 
-use crossterm::{cursor, queue, terminal};
-use crossterm::terminal::{Clear, ClearType};
+use anyhow::Result;
+use std::cell::RefCell;
+use std::io::{stdout, Write};
+use std::path::PathBuf;
+use std::rc::Rc;
+use uuid::Uuid;
+
 use crossterm::cursor::{MoveTo, MoveToNextLine};
 use crossterm::style::Print;
+use crossterm::terminal::{Clear, ClearType};
+use crossterm::{queue, terminal};
 
-use anyhow::{Context, Result};
-
-use crate::color;
-use crate::node::NodeType;
-use crate::file_icon::get_file_icon;
-
-
-//表示がスクロールされる際のカーソルの余白(?)説明が下手
-pub const SCROLL_MARGIN : usize = 2;
-
-//表示の際の右の余白
-pub const RIGHT_MARGIN : usize = 2;
-
-
-
-//表示するフォルダ/ファイルの情報を保持する構造体
-pub struct TextElement{
-	pub text : String,
-	pub num_lines : usize,
-	pub node_type : NodeType, 
-	pub is_opened : bool,
-	pub rank : usize,
-	pub route : VecDeque<usize>,
+#[allow(dead_code)]
+pub struct Viewer {
+    node_map: Rc<RefCell<NodeMap>>,
+    id_list: Vec<Uuid>,
+    console_message: Option<String>,
+    display_start_idx: usize,
+    cursor_idx: usize,
+    secondoy_cursor_idx: Option<usize>,
+    terminal_width: usize,
+    terminal_height: usize,
+    config: Rc<Config>,
 }
 
-//コンソールメッセージの状態(エラーor通常)
-pub enum ConsoleMessageStatus{
-	Error,
-	Normal,
-}
+#[allow(dead_code)]
+impl Viewer {
+    // ----------------------------------------------------------------
+    // コンストラクタ
+    // ----------------------------------------------------------------
+    pub fn new(node_map: Rc<RefCell<NodeMap>>, config: Rc<Config>) -> Viewer {
+        let (width, height) = terminal::size().unwrap();
+        let id_list: Vec<Uuid> = Vec::new();
 
-//コンソールメッセージの情報を保持する構造体
-struct ConsoleMessage{
-	message : String,
-	num_lines : usize,
-	status  : ConsoleMessageStatus,
-}
+        Viewer {
+            node_map: node_map,
+            id_list: id_list,
+            console_message: None,
+            display_start_idx: 0,
+            cursor_idx: 0,
+            secondoy_cursor_idx: None,
+            terminal_width: width as usize,
+            terminal_height: height as usize,
+            config: config,
+        }
+    }
 
-//コマンドラインに表示される部分
-/*
-text : 表示するフォルダ・ファイルのTextElement構造体を保持するベクタ．
-text_lenght : textの長さ
-console_msg : ConsoleMessage
-cursor_idx : 現在選択されているtextのインデックス
-display_start : ターミナルで表示する最初のtextのインデックス
-display_end : ターミナルで表示する最後のインデックス
+    // カーソルが選択しているノードのIDを取得
+    pub fn get_cursor_id(&self) -> Uuid {
+        self.id_list[self.cursor_idx].clone()
+    }
 
-terminal_width : ターミナルの横幅
-terminal_height : ターミナルの縦幅
-*/
-pub struct Viewer{
-	texts : VecDeque<TextElement>,
-	console_msg : ConsoleMessage, 
-	cursor_idx	  : usize,
-	secondly_cursor_idx : Option<usize>,
-	display_start : usize,
-	terminal_width : usize,
-	terminal_height : usize,
-}
+    // コンソールメッセージを保存
+    pub fn set_console_message(&mut self, message: Option<String>) {
+        self.console_message = message;
+    }
 
-pub fn new() -> Viewer{
-	let (width, height) = terminal::size().unwrap();
-	return Viewer{
-		texts: VecDeque::new(),
-		console_msg : ConsoleMessage{message : String::new(), num_lines : 1, status: ConsoleMessageStatus::Normal},
-		cursor_idx : 0,
-		secondly_cursor_idx : None,
-		display_start: 0,
-		terminal_width : width as usize,
-		terminal_height : height as usize,
-	}
-}
+    // ターミナルのサイズが変更されたときに呼び出される
+    pub fn resize(&mut self) -> Result<()>{
+        let (width, height) = terminal::size()?;
+        self.terminal_width = width as usize;
+        self.terminal_height = height as usize;
+        Ok(())
+    }
 
-pub fn new_element(text : String, num_lines : usize, node_type : NodeType,
-				   is_opened : bool, rank : usize, route : VecDeque<usize>) -> TextElement{
-	
-	let elem =  TextElement{ text : text, num_lines : num_lines, node_type : node_type, is_opened : is_opened,
-							 rank : rank, route : route};
-	return elem
-}
+    // カーソルを上に -----------------------
+    pub fn cursor_up(&mut self) {
+        // セカンダリーカーソルがあるならそっち優先
+        let mut current_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
 
-pub fn get_num_lines(text : &String, left_margin : &usize, right_margin : &usize) -> usize{
+        // 更新------------------
+        if current_idx == 0 {
+            return;
+        }
+        current_idx -= 1;
 
-	let length = text.len();
-	let (terminal_width, _) = terminal::size().unwrap();
-	let width = terminal_width as usize - right_margin - left_margin;
-	let num_lines = length.div_ceil(width);
+        // 格納 -----------------
+        match self.secondoy_cursor_idx {
+            Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
+            None => {self.cursor_idx = current_idx}
+        }
 
-	return num_lines
-}
+        return;
+    }
 
-impl Viewer{
+    // カーソルを下に -----------------------
+    pub fn cursor_down(&mut self) {
+        // セカンダリーカーソルがあるならそっち優先
+        let mut current_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
+        let length = self.id_list.len();
 
-	//-----------------------------------------------------------------------------------------
-	pub fn set_text(&mut self, text: VecDeque<TextElement>){
-		if text.len() - 1 < self.cursor_idx{
-			self.cursor_idx = text.len() - 1;
-		}
-		self.texts = text;
-		self.update_display_start();
-	}
+        // 更新------------------
+        if current_idx >= length {
+            return;
+        }
+        current_idx += 1;
 
-	fn update_display_start(&mut self){
-		//区切り線の数
-		let separator_size : usize = 2;
+        // 格納 -----------------
+        match self.secondoy_cursor_idx {
+            Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
+            None => {self.cursor_idx = current_idx}
+        }
+        return;
+    }
 
-		let valid_cursor_idx = match self.secondly_cursor_idx{
-			Some(v) => v,
-			None	=> self.cursor_idx,
-		};
+    // ランクの異なるノードまでカーソルを上向きにジャンプ ---------------------
+    pub fn cursor_jump_up(&mut self) -> Result<()> {
+        let node_map = self.node_map.borrow();
+        let current_rank = node_map.get_rank(&self.id_list[self.cursor_idx])?;
 
-		//display_startからカーソルのインデックスまでの行数を計算
-		let mut num_display_lines : usize = 0;
-		for i in self.display_start..= valid_cursor_idx{
-			num_display_lines += self.texts[i].num_lines;
-		}
+        let mut current_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
+        
+        // ランクの異なるノードがでてくるまでループ
+        loop {
+            // 上限
+            if current_idx <= 0 {
+                break;
+            } else {
+                current_idx = current_idx - 1
+            }
+            let next_rank = node_map.get_rank(&self.id_list[current_idx])?;
+            
+            //カーソルを更新して終了
+            if next_rank != current_rank {
+                match self.secondoy_cursor_idx {
+                    Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
+                    None => {self.cursor_idx = current_idx}
+                }
+                break;
+            }
+        }
+        return Ok(());
+    }
 
-		//スクロールダウンするときの処理　スクロールして出てくる行の行数に応じてdisplay_startを更新
-		if num_display_lines > (self.terminal_height - self.console_msg.num_lines - separator_size - SCROLL_MARGIN){
-			self.display_start =  self.display_start + num_display_lines - (self.terminal_height - self.console_msg.num_lines - separator_size - SCROLL_MARGIN);
-		}
+    // ランクの異なるノードまでカーソルを下向きにジャンプ ---------------------
+    pub fn cursor_jump_down(&mut self) -> Result<()> {
+        let node_map = self.node_map.borrow();
+        let current_rank = node_map.get_rank(&self.id_list[self.cursor_idx])?;
 
-		//スクロールアップするときの処理
-		if valid_cursor_idx >= SCROLL_MARGIN  && valid_cursor_idx < (self.display_start + SCROLL_MARGIN){
-			self.display_start = valid_cursor_idx - SCROLL_MARGIN;
-		}
-	}
+        let mut current_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
+        
+        loop {
+            // 下限
+            if current_idx >= self.id_list.len() - 1 {
+                break;
+            } else {
+                current_idx = current_idx + 1
+            }
+            let next_rank = node_map.get_rank(&self.id_list[current_idx])?;
 
-	pub fn set_console_msg(&mut self, console_msg: String, status : ConsoleMessageStatus){
-		let _num_lines = get_num_lines(&console_msg, &0, &RIGHT_MARGIN);
-		self.console_msg = ConsoleMessage{ message : console_msg, num_lines : _num_lines, status : status};
-	}
+            // カーソルを更新して終了
+            if next_rank != current_rank {
+                match self.secondoy_cursor_idx {
+                    Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
+                    None => {self.cursor_idx = current_idx}
+                }
+                break;
+            }
+        }
+        return Ok(());
+    }
 
-	pub fn clean_console(&mut self){
-		self.console_msg = ConsoleMessage{ message : String::new(), num_lines : 1, status : ConsoleMessageStatus::Normal};
-	}
+    pub fn activate_secondly_cursor_idx(&mut self) {
+        self.secondoy_cursor_idx = Some(self.cursor_idx)
+    }
+    pub fn deactivate_secondly_cursor_idx(&mut self) {
+        self.secondoy_cursor_idx = None
+    }
 
-	pub fn set_terminal_size(&mut self){
-		let (width, height) = terminal::size().unwrap();
-		self.terminal_width = width as usize;
-		self.terminal_height = height as usize;
-	}
+    // node_mapと同期 -------------------------
+    pub fn sync(&mut self) -> Result<()> {
+        let node_map = self.node_map.borrow();
 
-	//カーソル操作----------------------------------------------------------------------------------
+        // id_listの更新
+        let id_list = node_map.serialize()?;
+        self.id_list = id_list;
 
-	pub fn cursor_down(&mut self) -> Result<()>{
+        // カーソルを長さに合わせる
+        if self.id_list.len() <= self.cursor_idx {
+            self.cursor_idx = self.id_list.len() - 1;
+        }
 
-		if self.cursor_idx == (self.texts.len() - 1){
-			return Err(anyhow::anyhow!("reach to bottom"));
-		}
-		self.cursor_idx += 1;
-		Ok(())
-	}
+        Ok(())
+    }
 
-	pub fn cursor_up(&mut self) -> Result<()>{
+    // 各行の出力を生成 ----------------------------------
+    fn format(&self, name: String, icon: String, rank: usize, color: &str) -> String {
+        let indent = String::from("  ").repeat(rank);
+        let prefix_length = icon.len() + indent.len();
 
-		if self.cursor_idx == 0{
-			return Err(anyhow::anyhow!("reach to top"));
-		}
-		self.cursor_idx -= 1;
-		Ok(())
-	}
+        // ターミナルのサイズに合わせる ------
+        let modified_name = if self.terminal_width < (prefix_length + name.len()) {
+            let available_length = self.terminal_width - 1;
+            let mut _name = String::new();
+            for c in name.chars() {
+                if prefix_length + _name.len() >= available_length {
+                    _name.push_str("…");
+                    break;
+                }
+                _name.push(c);
+            }
+            _name
+        } else {
+            name
+        };
 
-	pub fn cursor_jump_down(&mut self) -> Result<()>{
+        // 結合 ----------------
+        let line = format!("{}{} {}{}", indent, icon, color, modified_name);
+        return line;
+    }
 
-		let current_rank = self.texts[self.cursor_idx].rank;
+    // カーソル上のノード => 青
+    // セカンダリーカーソルのノード => 緑
+    fn get_line_color(&self, i: usize) -> &str {
+        if i == self.cursor_idx {return COLOR::BLUE}
+        else {
+            match self.secondoy_cursor_idx {
+                Some(c) => {
+                    if c == i {return COLOR::GREEN}
+                    else {return COLOR::RESET}
+                }
+                None => {return COLOR::RESET}
+            }
+        }
+    }
 
-		loop {
-			self.cursor_down()?;
-			if self.texts[self.cursor_idx].rank < current_rank{
-				break
-			}
-		}
-		Ok(())
-	}
+    // 表示開始位置の更新
+    fn update_display_start(&mut self) {
+        let cursor_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
+        
+        if cursor_idx >= self.display_start_idx + self.terminal_height - 1 {
+            // 先に1を足しておかないとusizeが一瞬負の値になってパニックする
+            self.display_start_idx = (self.cursor_idx + 1) - self.terminal_height;
+        }
+        else if cursor_idx < self.display_start_idx{
+            self.display_start_idx = self.cursor_idx;
+        }
+    }
 
-	pub fn cursor_jump_up(&mut self) -> Result<()>{
+    // 表示をおこなうメソッド -----------------------------------------
+    pub fn display(&mut self) -> Result<()> {
+        self.update_display_start();
+        
+        let start = self.display_start_idx;
+        let end = start + self.terminal_height;
 
-		let current_rank = self.texts[self.cursor_idx].rank;
+        let node_map = self.node_map.borrow();
+        queue!(stdout(), Clear(ClearType::All), MoveTo(0, 0))?;
 
-		loop {
-			self.cursor_up()?;
-			if self.texts[self.cursor_idx].rank < current_rank{
-				break
-			}
-		}
-		Ok(())
-	}
+        for i in start..end {
+            if i >= self.id_list.len() {
+                break;
+            }
+            let color = self.get_line_color(i);
+            let id = self.id_list[i];
+            let name = node_map.get_name(&id)?;
+            let rank = node_map.get_rank(&id)?;
+            let node_type = node_map.get_node_type(&id)?;
+            let icon = match node_type {
+                NodeType::Folder => {
+                    let is_open = node_map.has_children(&id)?;
+                    icon::get_folder_icon(is_open, self.config.nerd_font)
+                }
+                NodeType::File => {
+                    icon::get_file_icon(&name, self.config.nerd_font)
+                }
+            };
+            let line = self.format(name, icon, rank, color);
+            let out = format!("{}{}", COLOR::RESET, line);
 
-	//-----------------------------------------------------------
+            queue!(stdout(), Print(out), MoveToNextLine(1))?;
+        }
 
-	pub fn activate_secondly_cursor(&mut self){
-		self.secondly_cursor_idx = Some(self.cursor_idx);
-	}
-
-	pub fn deactivate_secondly_cursor(&mut self) {
-		self.secondly_cursor_idx = None;
-	}
-	
-	pub fn secondly_cursor_down(&mut self) -> Result<()>{
-		
-		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
-
-		if current_idx == (self.texts.len() - 1){
-			return Err(anyhow::anyhow!("reach to bottom"));
-		}
-		self.secondly_cursor_idx = Some(current_idx + 1);
-		Ok(())
-	}
-
-	pub fn secondly_cursor_up(&mut self) -> Result<()>{
-
-		let current_idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
-
-		if current_idx == 0{
-			return Err(anyhow::anyhow!("reach to top"));
-		}
-		self.secondly_cursor_idx = Some(current_idx - 1);
-		Ok(())
-	}
-
-	pub fn get_secondly_cursor_route(&self) -> Result<VecDeque<usize>>{
-		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
-		let route = self.texts[idx].route.clone();
-		return Ok(route)
-	}
-
-	pub fn get_secondly_cursor_node_type(&self) -> Result<NodeType>{
-		let idx = self.secondly_cursor_idx.context("secondly cursor is not activated")?;
-
-		match self.texts[idx].node_type{
-			NodeType::Folder => {Ok(NodeType::Folder)}
-			NodeType::File   => {Ok(NodeType::File)}
-		}
-	}
-
-	//現在選択されているTextElementから情報を取ってくるやつ達---------------------------------------------
-	pub fn get_cursor_route(&self) -> VecDeque<usize>{
-		let idx = self.cursor_idx;
-		let route = self.texts[idx].route.clone();
-		return route
-	}
-
-	pub fn get_cursor_node_type(&self) -> NodeType{
-		match self.texts[self.cursor_idx].node_type{
-			NodeType::Folder => {NodeType::Folder}
-			NodeType::File   => {NodeType::File}
-		}
-	}
-
-	//display用の関数もろもろ-----------------------------------------------------------
-	fn get_display_color(&self, idx : &usize) -> String{
-		//現在選択されているノードの場合はアンダーバーとシアン，それ以外は白
-
-		let color = match self.secondly_cursor_idx {
-			None	=> {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
-					 	else { color::WHITE.to_string()}}
-
-			Some(v) => {if *idx == self.cursor_idx { format!("{}{}",color::UNDERLINE,color::CYAN) }
-						else if *idx == v { format!("{}{}",color::UNDERLINE,color::GREEN) }
-						else { color::WHITE.to_string() }}
-		};
-
-		return color
-	}
-	fn get_indent(&self, rank : &usize) -> String{
-		return String::from("  ").repeat(*rank)
-	}
-
-	fn format_text_for_display(&self, text : &String, num_lines : &usize, indent : &String,
-								color : &String, node_type : &NodeType, is_opened : &bool) -> String{
-
-		let icon = get_file_icon(text);
-
-		let line = 
-		if *num_lines == 1{ //ファイル名が一行に収まるときの処理
-			match node_type{
-				NodeType::Folder => {
-					let _arrow = if *is_opened {"▼ "} else {"▶ "};		//フォルダ名の先頭に付ける矢印
-					format!("{}{}{}{}{}{}", color::RESET,indent, color, _arrow, text, color::RESET) }
-		 		NodeType::File   => { format!("{}{}{}{}{}{}", color::RESET, indent, icon, color, text, color::RESET) }
-			}
-		}
-
-		else{  //ファイル名が一行に収まらない時の処理
-			let mut buf : Vec<String> = Vec::new();
-			let mut s = String::new();
-			for c in text.chars(){
-				s.push(c);
-				if (indent.len() + s.len()) == (self.terminal_width - RIGHT_MARGIN){
-					buf.push(s.clone());
-					s.clear();
-				}
-			}
-			buf.push(s.clone());
-
-			let mut _line = String::new();
-			_line.push_str(color::RESET);
-			match node_type{
-				NodeType::Folder => {
-					for (i, b) in buf.iter().enumerate(){
-						_line.push_str(&format!("{}{}", &indent, &color));
-
-						//フォルダ名の先頭につける矢印
-						let _arrow = if i == 0 { if *is_opened{"▼ "} else{"▶ "} }
-									 else{ "  " };
-						_line.push_str(&format!("{}{}{}{}", _arrow, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
-					}
-				}
-				NodeType::File => {
-					for b in buf.iter(){
-						_line.push_str(&format!("{}{}{}{}{}{}", &indent, icon, &color, b, color::RESET, &String::from(" ").repeat(RIGHT_MARGIN)));
-					}		
-				}
-			}
-			_line
-		};
-
-		return line
-	}
-
-	//-----------------------------------------------------------------------------------------
-	pub fn display(&self) -> Result<()>{
-		
-		let separator = String::from("-").repeat(self.terminal_width - 1);
-
-		queue!(stdout(), MoveTo(0,0), Print(format!("{}",color::WHITE)), Print(&separator), MoveToNextLine(1))?;
-
-		let mut i : usize			= self.display_start;
-		let mut line_counter :usize = 0;
-		loop{
-
-			let _color 		= self.get_display_color(&i);
-			let _indent 	= self.get_indent(&self.texts[i].rank);
-			let _num_lines 	= self.texts[i].num_lines;
-
-			//出力の行数分だけターミナルを掃除
-			queue!(stdout(), cursor::SavePosition)?;
-			for _ in 0.._num_lines{
-				queue!(stdout(), Clear(ClearType::CurrentLine), MoveToNextLine(1))?;
-			}
-			queue!(stdout(), cursor::RestorePosition)?;
-
-			//表示用に整形
-			let _line = self.format_text_for_display(&self.texts[i].text, &self.texts[i].num_lines, &_indent, &_color, 
-													 &self.texts[i].node_type, &self.texts[i].is_opened);
-			queue!(stdout(), Print(_line), MoveToNextLine(1))?;
-
-			//ループ終了条件の処理
-			i += 1;
-			line_counter += _num_lines;
-			if i > (self.texts.len() - 1) || line_counter > (self.terminal_height - &self.console_msg.num_lines - 3){
-				break
-			}
-		}
-		//---------------------------------------------------------------------------------------------------------------------------
-
-		
-		queue!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, (self.terminal_height-&self.console_msg.num_lines-1) as u16),
-			   Print(format!("{}{}",color::WHITE, &separator)), MoveToNextLine(1))?;
-
-		let console_msg = match self.console_msg.status{
-			ConsoleMessageStatus::Normal => { format!("{}{}", color::WHITE, self.console_msg.message) }
-			ConsoleMessageStatus::Error  => { format!("{}{}", color::RED, self.console_msg.message)}
-		};
-		queue!(stdout(), Print(console_msg))?;
-
-		stdout().flush()?;
-
-		Ok(())
-	}
+        if let Some(ref m) = self.console_message {
+            queue!(stdout(), MoveTo(0, self.terminal_height as u16), Print(format!("{}{}{}", COLOR::RED, m, COLOR::RESET)))?;
+        }
+        stdout().flush()?;
+        Ok(())
+    }
 }
