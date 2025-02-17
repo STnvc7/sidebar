@@ -37,6 +37,10 @@ impl NodeMap {
     // 閉じてたら子ノードを追加，開いてたら子ノードを閉じる
     // ----------------------------------------------------------------
     pub fn open_and_close_node(&mut self, id: &Uuid) -> Result<()> {
+        let path = self.get_path(id)?;
+        if path.is_dir() == false {
+            return Err(anyhow!("not folder"))
+        }
         let children_ids = self.get_children_ids(&id)?;
         match children_ids {
             Some(c) => {

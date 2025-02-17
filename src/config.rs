@@ -11,9 +11,7 @@ pub struct Config {
     pub ignore: Vec<String>,
     pub export_variable_name: String,
     pub nerd_font: bool,
-    // pub efficient_mode: bool,
     // pub auto_update: bool,
-    // pub wrap_line: bool;
 }
 
 pub fn load_config() -> Result<Config> {

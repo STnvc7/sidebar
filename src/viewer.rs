@@ -53,12 +53,19 @@ impl Viewer {
 
     // カーソルが選択しているノードのIDを取得
     pub fn get_cursor_id(&self) -> Uuid {
-        self.id_list[self.cursor_idx].clone()
+        let current_idx = match self.secondoy_cursor_idx {
+            Some(i) => i,
+            None => self.cursor_idx,
+        };
+        self.id_list[current_idx].clone()
     }
 
     // コンソールメッセージを保存
-    pub fn set_console_message(&mut self, message: Option<String>) {
-        self.console_message = message;
+    pub fn set_console_message(&mut self, message: String) {
+        self.console_message = Some(message);
+    }
+    pub fn clear_console_message(&mut self) {
+        self.console_message = None
     }
 
     // ターミナルのサイズが変更されたときに呼び出される
@@ -102,7 +109,7 @@ impl Viewer {
         let length = self.id_list.len();
 
         // 更新------------------
-        if current_idx >= length {
+        if current_idx >= length-1 {
             return;
         }
         current_idx += 1;
@@ -118,13 +125,12 @@ impl Viewer {
     // ランクの異なるノードまでカーソルを上向きにジャンプ ---------------------
     pub fn cursor_jump_up(&mut self) -> Result<()> {
         let node_map = self.node_map.borrow();
-        let current_rank = node_map.get_rank(&self.id_list[self.cursor_idx])?;
-
         let mut current_idx = match self.secondoy_cursor_idx {
             Some(i) => i,
             None => self.cursor_idx,
         };
-        
+        let current_rank = node_map.get_rank(&self.id_list[current_idx])?;
+
         // ランクの異なるノードがでてくるまでループ
         loop {
             // 上限
@@ -150,12 +156,12 @@ impl Viewer {
     // ランクの異なるノードまでカーソルを下向きにジャンプ ---------------------
     pub fn cursor_jump_down(&mut self) -> Result<()> {
         let node_map = self.node_map.borrow();
-        let current_rank = node_map.get_rank(&self.id_list[self.cursor_idx])?;
 
         let mut current_idx = match self.secondoy_cursor_idx {
             Some(i) => i,
             None => self.cursor_idx,
         };
+        let current_rank = node_map.get_rank(&self.id_list[current_idx])?;
         
         loop {
             // 下限
@@ -251,10 +257,10 @@ impl Viewer {
         
         if cursor_idx >= self.display_start_idx + self.terminal_height - 1 {
             // 先に1を足しておかないとusizeが一瞬負の値になってパニックする
-            self.display_start_idx = (self.cursor_idx + 1) - self.terminal_height;
+            self.display_start_idx = (cursor_idx + 1) - self.terminal_height;
         }
         else if cursor_idx < self.display_start_idx{
-            self.display_start_idx = self.cursor_idx;
+            self.display_start_idx = cursor_idx;
         }
     }
 
@@ -293,7 +299,8 @@ impl Viewer {
         }
 
         if let Some(ref m) = self.console_message {
-            queue!(stdout(), MoveTo(0, self.terminal_height as u16), Print(format!("{}{}{}", COLOR::RED, m, COLOR::RESET)))?;
+            let num_line = m.len().div_ceil(self.terminal_width);
+            queue!(stdout(), MoveTo(0, (self.terminal_height-num_line) as u16), Print(format!("{}{}{}", COLOR::RED, m, COLOR::RESET)))?;
         }
         stdout().flush()?;
         Ok(())

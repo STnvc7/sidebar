@@ -43,14 +43,14 @@ impl App {
             // 標準入力からコマンドを取得 ------------------------
             let command = match read_command() {
                 Err(e) => {
-                    viewer.set_console_message(Some(format!("{}", e)));
+                    viewer.set_console_message(format!("{}", e));
                     continue;
                 }
                 Ok(command) => {
                     if command == Command::Quit{
                         break
                     }
-                    viewer.set_console_message(None);
+                    viewer.clear_console_message();
                     command
                 }
             };
@@ -60,9 +60,10 @@ impl App {
 
             let result = self.command_runner.run_command(command);
 
-            // if let Err(e) = result {
-            //     viewer.set_console_message(Some(format!("{}", e)));
-            // }
+            if let Err(e) = result {
+                let mut viewer = self.viewer.borrow_mut();
+                viewer.set_console_message(format!("{}", e));
+            }
         }
         return Ok(());
     }

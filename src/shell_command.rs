@@ -3,16 +3,10 @@ use duct::cmd;
 use std::path::PathBuf;
 
 // ファイルのオープン====================================
-// windows
-#[cfg(target_os = "windows")]
-pub fn open_editor(path: &PathBuf, command: String) -> Result<()> {
+pub fn open_file(path: &PathBuf, command: &String) -> Result<()> {
+    cmd!(command, path).stderr_capture().run()?;
     return Ok(());
 }
-
-// linux
-#[cfg(target_os = "linux")]
-pub fn open_editor(path: &PathBuf, command: String) -> Result<()> {}
-//=================================================
 
 // 新しいファイルを作成=================================
 #[cfg(target_os = "windows")]

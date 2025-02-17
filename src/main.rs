@@ -5,7 +5,7 @@ mod config;
 mod icon;
 mod node;
 mod node_map;
-mod shell_commands;
+mod shell_command;
 mod utils;
 mod viewer;
 
