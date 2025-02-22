@@ -1,6 +1,10 @@
+#![allow(dead_code)]
+
 use anyhow::Result;
 use duct::cmd;
 use std::path::PathBuf;
+use std::fs;
+use log;
 
 // ファイルのオープン====================================
 pub fn open_file(path: &PathBuf, command: &String) -> Result<()> {
@@ -27,9 +31,12 @@ pub fn cp(from: &PathBuf, to: &PathBuf) -> Result<()> {
 }
 
 // 移動===========================================
-#[cfg(target_os = "windows")]
+// #[cfg(target_os = "windows")]
 pub fn mv(from: &PathBuf, to: &PathBuf) -> Result<()> {
-    return Ok(());
+    log::info!("{:?}, {:?}", from, to);
+    // cmd!("move", from , to).read()?;
+    fs::rename(from, to)?;
+    Ok(())
 }
 
 // 名前の変更 ====================================

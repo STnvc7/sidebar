@@ -7,26 +7,54 @@ use crate::config::Config;
 use anyhow::Result;
 use std::cell::RefCell;
 use std::io::{stdout, Write};
-use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
 use uuid::Uuid;
 
-use crossterm::cursor::{MoveTo, MoveToNextLine};
+use crossterm::cursor::{MoveTo, MoveToNextLine, MoveDown};
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{queue, terminal};
 
+#[derive(Debug, Clone)]
+pub enum ConsoleMessageStatus{
+    Info,
+    Error,
+    Notify
+}
+#[derive(Debug)]
+struct ConsoleMessage{
+    pub message: String,
+    pub status: ConsoleMessageStatus,
+}
+impl ConsoleMessage{
+    fn new(message: String, status: ConsoleMessageStatus) -> ConsoleMessage{
+        ConsoleMessage{
+            message: message,
+            status: status
+        }
+    }
+    fn get_num_lines(&self, terminal_width: usize) -> usize {
+        return self.message.len().div_ceil(terminal_width) + 1;
+    }
+
+}
+
+
+
 #[allow(dead_code)]
 pub struct Viewer {
-    node_map: Rc<RefCell<NodeMap>>,
+    node_map: Arc<Mutex<NodeMap>>,
     id_list: Vec<Uuid>,
-    console_message: Option<String>,
+    console_message: Option<ConsoleMessage>,
     display_start_idx: usize,
+    display_end_idx: usize,
     cursor_idx: usize,
-    secondoy_cursor_idx: Option<usize>,
+    secondoy_cursor_mode: bool,
     terminal_width: usize,
     terminal_height: usize,
-    config: Rc<Config>,
+    config: Arc<Config>,
 }
 
 #[allow(dead_code)]
@@ -34,7 +62,7 @@ impl Viewer {
     // ----------------------------------------------------------------
     // コンストラクタ
     // ----------------------------------------------------------------
-    pub fn new(node_map: Rc<RefCell<NodeMap>>, config: Rc<Config>) -> Viewer {
+    pub fn new(node_map: Arc<Mutex<NodeMap>>, config: Arc<Config>) -> Viewer {
         let (width, height) = terminal::size().unwrap();
         let id_list: Vec<Uuid> = Vec::new();
 
@@ -43,8 +71,9 @@ impl Viewer {
             id_list: id_list,
             console_message: None,
             display_start_idx: 0,
+            display_end_idx: 1,
             cursor_idx: 0,
-            secondoy_cursor_idx: None,
+            secondoy_cursor_mode: false,
             terminal_width: width as usize,
             terminal_height: height as usize,
             config: config,
@@ -53,16 +82,12 @@ impl Viewer {
 
     // カーソルが選択しているノードのIDを取得
     pub fn get_cursor_id(&self) -> Uuid {
-        let current_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
-        self.id_list[current_idx].clone()
+        self.id_list[self.cursor_idx].clone()
     }
 
     // コンソールメッセージを保存
-    pub fn set_console_message(&mut self, message: String) {
-        self.console_message = Some(message);
+    pub fn set_console_message(&mut self, message: String, status: ConsoleMessageStatus) {
+        self.console_message = Some(ConsoleMessage::new(message, status));
     }
     pub fn clear_console_message(&mut self) {
         self.console_message = None
@@ -76,59 +101,41 @@ impl Viewer {
         Ok(())
     }
 
+    pub fn activate_secondly_cursor(&mut self) {
+        self.secondoy_cursor_mode = true;
+    }
+    pub fn deactivate_secondly_cursor(&mut self) {
+        self.secondoy_cursor_mode = false;
+    }
+
     // カーソルを上に -----------------------
     pub fn cursor_up(&mut self) {
-        // セカンダリーカーソルがあるならそっち優先
-        let mut current_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
-
         // 更新------------------
-        if current_idx == 0 {
+        if self.cursor_idx == 0 {
             return;
         }
-        current_idx -= 1;
-
-        // 格納 -----------------
-        match self.secondoy_cursor_idx {
-            Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
-            None => {self.cursor_idx = current_idx}
-        }
+        self.cursor_idx -= 1;
 
         return;
     }
 
     // カーソルを下に -----------------------
     pub fn cursor_down(&mut self) {
-        // セカンダリーカーソルがあるならそっち優先
-        let mut current_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
         let length = self.id_list.len();
 
         // 更新------------------
-        if current_idx >= length-1 {
+        if self.cursor_idx >= length-1 {
             return;
         }
-        current_idx += 1;
+        self.cursor_idx += 1;
 
-        // 格納 -----------------
-        match self.secondoy_cursor_idx {
-            Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
-            None => {self.cursor_idx = current_idx}
-        }
         return;
     }
 
     // ランクの異なるノードまでカーソルを上向きにジャンプ ---------------------
     pub fn cursor_jump_up(&mut self) -> Result<()> {
-        let node_map = self.node_map.borrow();
-        let mut current_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
+        let node_map = self.node_map.lock().unwrap();
+        let mut current_idx = self.cursor_idx;
         let current_rank = node_map.get_rank(&self.id_list[current_idx])?;
 
         // ランクの異なるノードがでてくるまでループ
@@ -143,10 +150,7 @@ impl Viewer {
             
             //カーソルを更新して終了
             if next_rank != current_rank {
-                match self.secondoy_cursor_idx {
-                    Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
-                    None => {self.cursor_idx = current_idx}
-                }
+                self.cursor_idx = current_idx;
                 break;
             }
         }
@@ -155,12 +159,9 @@ impl Viewer {
 
     // ランクの異なるノードまでカーソルを下向きにジャンプ ---------------------
     pub fn cursor_jump_down(&mut self) -> Result<()> {
-        let node_map = self.node_map.borrow();
+        let node_map = self.node_map.lock().unwrap();
 
-        let mut current_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
+        let mut current_idx = self.cursor_idx;
         let current_rank = node_map.get_rank(&self.id_list[current_idx])?;
         
         loop {
@@ -174,26 +175,16 @@ impl Viewer {
 
             // カーソルを更新して終了
             if next_rank != current_rank {
-                match self.secondoy_cursor_idx {
-                    Some(_) => {self.secondoy_cursor_idx = Some(current_idx);}
-                    None => {self.cursor_idx = current_idx}
-                }
+                self.cursor_idx = current_idx;
                 break;
             }
         }
         return Ok(());
     }
 
-    pub fn activate_secondly_cursor_idx(&mut self) {
-        self.secondoy_cursor_idx = Some(self.cursor_idx)
-    }
-    pub fn deactivate_secondly_cursor_idx(&mut self) {
-        self.secondoy_cursor_idx = None
-    }
-
     // node_mapと同期 -------------------------
     pub fn sync(&mut self) -> Result<()> {
-        let node_map = self.node_map.borrow();
+        let node_map = self.node_map.lock().unwrap();
 
         // id_listの更新
         let id_list = node_map.serialize()?;
@@ -234,52 +225,61 @@ impl Viewer {
     }
 
     // カーソル上のノード => 青
-    // セカンダリーカーソルのノード => 緑
+    // セカンダリーカーソル上のノード => 緑
     fn get_line_color(&self, i: usize) -> &str {
-        if i == self.cursor_idx {return COLOR::BLUE}
-        else {
-            match self.secondoy_cursor_idx {
-                Some(c) => {
-                    if c == i {return COLOR::GREEN}
-                    else {return COLOR::RESET}
-                }
-                None => {return COLOR::RESET}
-            }
+        if i != self.cursor_idx {
+            return COLOR::RESET
         }
+
+        if self.secondoy_cursor_mode{
+            return COLOR::front::GREEN
+        }
+
+        return COLOR::front::BLUE
     }
 
     // 表示開始位置の更新
-    fn update_display_start(&mut self) {
-        let cursor_idx = match self.secondoy_cursor_idx {
-            Some(i) => i,
-            None => self.cursor_idx,
-        };
-        
-        if cursor_idx >= self.display_start_idx + self.terminal_height - 1 {
-            // 先に1を足しておかないとusizeが一瞬負の値になってパニックする
-            self.display_start_idx = (cursor_idx + 1) - self.terminal_height;
+    fn update_display_size(&mut self) {
+        let mut display_height = self.terminal_height;
+
+        // コンソールメッセージがある際はメッセージの行数分表示の範囲を狭める
+        if let Some(ref console_msg) = self.console_message {
+            let num_lines = console_msg.get_num_lines(self.terminal_width);
+            display_height -= num_lines;
+
         }
-        else if cursor_idx < self.display_start_idx{
-            self.display_start_idx = cursor_idx;
+        
+        // display_startの更新---------------------------------------
+        if self.cursor_idx >= self.display_start_idx + display_height - 1 {
+            // カーソルが表示範囲を超えたとき
+            // 先に1を足しておかないとusizeが一瞬負の値になってパニックする
+            self.display_start_idx = (self.cursor_idx + 1) - display_height;
+        }
+        else if self.cursor_idx < self.display_start_idx{
+            self.display_start_idx = self.cursor_idx;
+        }
+
+        // display_endの更新 ---------------------------------------
+        if self.display_start_idx + display_height > self.id_list.len() {
+            self.display_end_idx = self.id_list.len() - 1;
+        }
+        else {
+            self.display_end_idx = self.display_start_idx + display_height - 1;
         }
     }
 
     // 表示をおこなうメソッド -----------------------------------------
     pub fn display(&mut self) -> Result<()> {
-        self.update_display_start();
-        
-        let start = self.display_start_idx;
-        let end = start + self.terminal_height;
+        self.update_display_size();
 
-        let node_map = self.node_map.borrow();
+        let node_map = self.node_map.lock().unwrap();
         queue!(stdout(), Clear(ClearType::All), MoveTo(0, 0))?;
 
-        for i in start..end {
-            if i >= self.id_list.len() {
-                break;
-            }
-            let color = self.get_line_color(i);
+        // ノードの表示
+        for i in self.display_start_idx..=self.display_end_idx {
+            
             let id = self.id_list[i];
+            
             let name = node_map.get_name(&id)?;
             let rank = node_map.get_rank(&id)?;
             let node_type = node_map.get_node_type(&id)?;
@@ -292,15 +292,35 @@ impl Viewer {
                     icon::get_file_icon(&name, self.config.nerd_font)
                 }
             };
+            let color = self.get_line_color(i);
+
             let line = self.format(name, icon, rank, color);
-            let out = format!("{}{}", COLOR::RESET, line);
+            let out = format!("{}{}{}", COLOR::RESET, line, COLOR::RESET);
 
             queue!(stdout(), Print(out), MoveToNextLine(1))?;
         }
 
-        if let Some(ref m) = self.console_message {
-            let num_line = m.len().div_ceil(self.terminal_width);
-            queue!(stdout(), MoveTo(0, (self.terminal_height-num_line) as u16), Print(format!("{}{}{}", COLOR::RED, m, COLOR::RESET)))?;
+        // コンソールメッセージ ---------------------------------------------
+        if let Some(ref console_msg) = self.console_message {
+            let message = console_msg.message.clone();
+            let status = console_msg.status.clone();
+
+            // 綺麗に表示する用
+            let num_line = console_msg.get_num_lines(self.terminal_width);
+            let blank = String::from(" ").repeat(self.terminal_width - message.len().rem_euclid(self.terminal_width));
+            let color = match status{
+                ConsoleMessageStatus::Info => COLOR::back::CYAN,
+                ConsoleMessageStatus::Error => COLOR::back::RED,
+                ConsoleMessageStatus::Notify => COLOR::back::GREEN,
+            };
+
+            queue!(
+                stdout(), 
+                MoveTo(0, (self.terminal_height - num_line) as u16), 
+                Clear(ClearType::FromCursorDown), 
+                MoveDown(1), 
+                Print(format!("{}{}{}{}", color, message, blank, COLOR::RESET))
+            )?;
         }
         stdout().flush()?;
         Ok(())

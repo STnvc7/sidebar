@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use anyhow::{anyhow, Result};
 use log;
 use std::cmp::Ordering;
@@ -22,7 +24,7 @@ impl NodeMap {
     // ----------------------------------------------------------------
     pub fn new(root: &PathBuf) -> NodeMap {
         let root_id = Uuid::new_v4();
-        let root_node = Node::new(root.clone(), NodeType::Folder, 0);
+        let root_node = Node::new(root_id.clone(), root.clone(), NodeType::Folder, 0);
 
         let mut node_map: HashMap<Uuid, Node> = HashMap::new();
         node_map.insert(root_id.clone(), root_node);
@@ -81,7 +83,12 @@ impl NodeMap {
         let mut children_ids: Vec<Uuid> = Vec::new();
         for (_path, _file_type) in children.iter() {
             let _id = Uuid::new_v4();
-            let _child = Node::new(_path.clone(), _file_type.clone(), parent_rank + 1);
+            let _child = Node::new(
+                _id.clone(),
+                _path.clone(), 
+                _file_type.clone(), 
+                parent_rank + 1
+            );
 
             self.node_map.insert(_id.clone(), _child);
             children_ids.push(_id)
@@ -144,7 +151,12 @@ impl NodeMap {
             // 新しいファイルやディレクトリが作成されている場合 (= 更新元の子ノードのパスのリストに含まれないパスがある場合)
             if existing_paths.contains(&path) == false {
                 let _id = Uuid::new_v4();
-                let _child = Node::new(path.to_path_buf(), file_type.clone(), parent_rank + 1);
+                let _child = Node::new(
+                    _id.clone(),
+                    path.to_path_buf(), 
+                    file_type.clone(), 
+                    parent_rank + 1
+                );
 
                 self.node_map.insert(_id.clone(), _child);
                 new_ids.push(_id);
@@ -171,25 +183,40 @@ impl NodeMap {
 
     fn _serialize(&self, id: &Uuid) -> Result<Vec<Uuid>> {
         let children_ids = self.get_children_ids(id)?;
-
-        match children_ids {
-            Some(ids) => {
-                let mut buf: Vec<Uuid> = Vec::new();
-                for id in ids.iter() {
-                    let grandchildren = self._serialize(&id)?;
-                    buf.extend(grandchildren);
-                }
-                buf.insert(0, id.clone());
-
-                return Ok(buf);
-            }
-            None => return Ok(vec![id.clone()]),
+        // 子ノードがない場合はこのidのみをベクタ化して返す
+        if let None = children_ids {
+            return Ok(vec![id.clone()])
         }
+
+        let children_ids_sorted = self.sort_ids(children_ids.unwrap())?;
+
+        let mut buf: Vec<Uuid> = Vec::new();
+        for id in children_ids_sorted.iter() {
+            let grandchildren = self._serialize(&id)?;
+            buf.extend(grandchildren);
+        }
+        buf.insert(0, id.clone());
+
+        return Ok(buf);
+    }
+
+    // idのソート
+    fn sort_ids(&self, ids: Vec<Uuid>) -> Result<Vec<Uuid>> {
+        let mut nodes = ids.iter().map(|id| self.get_node(id)).collect::<Result<Vec<Node>>>()?;
+        nodes.sort_by(Node::sort_fn);
+        let sorted_id = nodes.iter().map(|node| node.get_id()).collect::<Vec<Uuid>>(); 
+        Ok(sorted_id)
     }
 
     // ----------------------------------------------------------------
     // ゲッター
     // ----------------------------------------------------------------
+    fn get_node(&self, id: &Uuid) -> Result<Node> {
+        match self.node_map.get(id) {
+            Some(node) => return Ok(node.clone()),
+            None => return Err(anyhow!("id: {} does not exist", id)),
+        }
+    }
     pub fn get_root_id(&self) -> Uuid {
         self.root_id.clone()
     }
@@ -256,28 +283,6 @@ impl NodeMap {
     }
     // ----------------------------------------------------------------
     fn find_children(&self, id: &Uuid) -> Result<Vec<(PathBuf, NodeType)>> {
-        fn sort(a: &(PathBuf, NodeType), b: &(PathBuf, NodeType)) -> Ordering {
-            let (path_a, file_type_a) = a;
-            let (path_b, file_type_b) = b;
-
-            match file_type_a.cmp(&file_type_b) {
-                Ordering::Equal => {
-                    // 2. 拡張子で比較
-                    let ext_a = path_a.extension();
-                    let ext_b = path_b.extension();
-
-                    if (ext_a == None) || (ext_b == None) {
-                        return path_a.file_name().cmp(&path_b.file_name());
-                    }
-
-                    match ext_a.unwrap().cmp(ext_b.unwrap()) {
-                        Ordering::Equal => return path_a.file_name().cmp(&path_b.file_name()),
-                        other => return other,
-                    }
-                }
-                other => return other,
-            }
-        }
 
         let parent_path = self.get_path(id)?;
         let mut children: Vec<(PathBuf, NodeType)> = Vec::new();
@@ -289,7 +294,7 @@ impl NodeMap {
             children.push((_path, _file_type));
         }
 
-        children.sort_by(sort);
+        // children.sort_by(Node::sort_fn);
 
         return Ok(children);
     }

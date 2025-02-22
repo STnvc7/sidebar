@@ -27,7 +27,8 @@ use crate::app::App;
 use crate::config::load_config;
 use crate::utils::path::{get_cwd_path, resolve_path};
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     init_logger(LevelFilter::Info, "app.log")?;
 
     let path = parse_arg_and_get_root()?;

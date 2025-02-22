@@ -3,7 +3,6 @@ pub mod path {
     use anyhow::{anyhow, Result};
     use path_absolutize::Absolutize;
     use std::env;
-    use std::fs;
     use std::path::{Path, PathBuf};
 
     pub fn get_cwd_path() -> Result<PathBuf> {
@@ -26,19 +25,6 @@ pub mod path {
         }
 
         return Ok(path.to_path_buf());
-    }
-
-    pub fn has_child<P: AsRef<Path>>(path: P) -> bool {
-        let path = path.as_ref();
-
-        if path.is_dir() {
-            // ディレクトリの内容を取得し、最初の要素を確認
-            let mut entries = fs::read_dir(path).unwrap();
-            return entries.next().is_some();
-        } else {
-            // 指定されたパスがディレクトリでない場合はエラー
-            return false;
-        }
     }
 
     pub fn get_file_type<P: AsRef<Path>>(path: P) -> Result<NodeType> {
