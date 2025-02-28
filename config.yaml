@@ -1,0 +1,7 @@
+sync_server: true
+editor_command: "subl"
+ignore: [".*"]
+nerd_font: true
+skip_exist: true
+saving_memory: true
+auto_update: true

@@ -1,26 +1,61 @@
-mod node;
 mod app;
-mod viewer;
 mod color;
-mod file_icon;
 mod command;
-mod error;
+mod config;
+mod icon;
+mod node;
+mod node_map;
+mod utils;
+mod viewer;
 
-use std::io::stdout;
-use std::env;
-
-use crossterm;
-use crossterm::{cursor, execute};
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use anyhow::Result;
+use std::fs::File;
+use std::path::PathBuf;
+use simplelog::{LevelFilter, WriteLogger};
+use clap::Parser;
+use crate::app::App;
+use crate::config::load_config;
+use crate::utils::path::{get_cwd_path, resolve_path};
 
-#[warn(unused_imports)]
-fn main() -> Result<()>{
-	let args = env::args().nth(1);
-
-    execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
-    app::run(&args)?;
-    execute!(stdout(), cursor::Show, LeaveAlternateScreen)?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    
+    // 各種初期化
+    init_logger(LevelFilter::Info, "app.log")?;
+    let config = load_config()?;
+    let args = Args::parse();
+    
+    // if args.sync {
+    //     let sync_client = Sync::new();
+    //     sync_client.run()?;
+    //     return Ok(())
+    // }
+    
+    let path = match args.path {
+        Some(p) => resolve_path(p)?,
+        None => get_cwd_path()? 
+    };
+    let mut app = App::new(path, config)?;
+    app.run()?;
 
     Ok(())
+}
+
+fn init_logger(level: LevelFilter, filename: &str) -> Result<()> {
+    WriteLogger::init(
+        level,
+        simplelog::Config::default(),
+        File::create(filename).unwrap(),
+    )?;
+
+    return Ok(());
+}
+
+#[derive(Parser)]
+#[command(version, about)]
+struct Args {
+    #[arg(short, long, value_parser, help="Specify root path of sidebar")]
+    path: Option<PathBuf>,
+    #[arg(short, long, help="Synchronize current working directory with another sidebar")]
+    sync: bool,
 }

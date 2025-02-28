@@ -1,397 +1,510 @@
-use std::path::{PathBuf, Path};
-use std::io::{stdout, Write};
+#![allow(unused_imports)]
 
-use crossterm::event::{read, Event, KeyEvent, KeyCode};
-use crossterm::{cursor, queue, style, terminal};
-
+use anyhow::{anyhow, Result};
 use duct::cmd;
-use anyhow::{Context, Result};
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyEventKind};
+use log;
+use std::sync::{Mutex, Arc};
+use std::fs;
+use std::path::PathBuf;
+use fs_extra;
 
-use crate::node::{Node, NodeType};
+use crate::node_map::NodeMap;
 use crate::viewer::{Viewer, ConsoleMessageStatus};
-use crate::error::ApplicationError;
-use crate::color;
+use crate::config::Config;
 
-pub fn cursor_up(viewer : &mut Viewer) -> Result<()> {
-
-    viewer.cursor_up()?;
-    Ok(())
+#[derive(Debug, PartialEq, Eq)]
+pub enum Command {
+    Enter,
+    OpenFolder,
+    NewFile,
+    NewFolder,
+    Copy,
+    Move,
+    Rename,
+    Delete,
+    ShowPath,
+    Sync,
+    Link,
+    Quit,
+    Update,
+    Shell,
+    Resize,
+    Up,
+    Down,
+    JumpUp,
+    JumpDown,
 }
 
-pub fn cursor_jump_up(viewer : &mut Viewer) -> Result<()> {
-
-    viewer.cursor_jump_up()?;
-    Ok(())
-}
-
-pub fn cursor_down(viewer : &mut Viewer) -> Result<()> {
-
-    viewer.cursor_down()?;
-    Ok(())
-}
-
-pub fn cursor_jump_down(viewer : &mut Viewer) -> Result<()> {
-
-    viewer.cursor_jump_down()?;
-    Ok(())
-}
-
-pub fn show_path(tree : &Box<Node>, viewer : &mut Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let path = tree.get_path(route).to_string_lossy().into_owned();
-    viewer.set_console_msg(path, ConsoleMessageStatus::Normal);
-    Ok(())
-}
-
-pub fn update(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
-
-    let mut route = viewer.get_cursor_route();
-
+pub fn read_command() -> Result<Command> {
+    // キーが押されたときと話されたときでイベントが送信されるので，押されたときのみ受理
     loop {
-        if route.len() == 0{
-            break
-        }
+        let event = read()?;
 
-        let _path = tree.get_path(route.clone());
-        if _path.is_dir() {
-            break
-        }
-        else{
-            let _ = route.pop_back().unwrap();
-        }
-    }
-
-    tree.update_node(route.clone());
-    Ok(())
-}
-
-pub fn copy(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let original_path = tree.get_path(route);
-    let file_name_osstr = &original_path.file_name().context("coudln't get filename")?;
-    let file_name_str = file_name_osstr.to_str().context("coudln't convert OsStr to &str")?;
-
-    let mut destination = get_path_from_secondly_cursor(tree, viewer)?;
-
-    if destination.is_file() {
-        destination = (*destination.parent().unwrap()).to_path_buf();
-    }
-
-    let new_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
-
-    if Path::new(&new_path_string).exists(){
-        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
-    }
-
-    let result = cmd!("cp", "-r", "-n", original_path, new_path_string.clone()).stderr_capture().run();
-
-    match result{
-        Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("cp")))) }
-    }
-
-    update(tree, viewer)?;
-    Ok(())
-}
-
-pub fn move_to(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let original_path = tree.get_path(route);
-    let file_name_osstr = &original_path.file_name().context("coudln't get filename")?;
-    let file_name_str = file_name_osstr.to_str().context("coudln't convert OsStr to &str")?;
-
-    let mut destination = get_path_from_secondly_cursor(tree, viewer)?;
-
-    if destination.is_file() {
-        destination = (*destination.parent().unwrap()).to_path_buf();
-    }
-
-    let new_path_string = format!("{}/{}", destination.to_string_lossy().into_owned(), file_name_str);
-
-    if Path::new(&new_path_string).exists(){
-        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
-    }
-
-    let result = cmd!("mv", "-n", original_path, new_path_string.clone()).stderr_capture().run();
-
-    match result{
-        Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("mv")))) }
-    }
-
-    update(tree, viewer)?;
-
-    Ok(())
-}
-
-pub fn help() -> Result<()> {
-
-    queue!(stdout(), terminal::Clear(terminal::ClearType::All), cursor::MoveTo(0,0), style::Print(color::RESET))?;
-
-    let help_msg = vec![
-        "'h'        : Show help",
-        "'q'/Esc    : Quit application",
-        "↑          : Cursor up",
-        "↓          : Curosr down",
-        "Shift+↑    : Cursor jump up",
-        "Shift+↓    : Curosr jump down",
-        "'p'        : Show file/folder path",
-        "Enter      : Open file/folder",
-        "'n'        : New file",
-        "Shift+'n'  : New folder",
-        "'r'        : Rename",
-        "'m'        : Move",
-        ];
-
-    for line in help_msg.iter(){
-        queue!(stdout(), style::Print("> "), style::Print(line), cursor::MoveToNextLine(1))?;
-    }
-
-    queue!(stdout(), cursor::MoveToNextLine(1), style::Print("Press 'q'/Esc to exit help"), cursor::MoveToNextLine(1))?;
-
-    stdout().flush()?;
-
-    loop{
-        let _event = read()?;
-        match _event{
-            Event::Key(e) =>{
-                match e{
-                    KeyEvent{code:KeyCode::Char('q'),modifiers:_,kind:_,state:_}  =>  {break;},
-                    KeyEvent{code:KeyCode::Esc,modifiers:_,kind:_,state:_}        =>  {break;},
-                    _ => {}
+        let command = match event {
+            Event::Key(e) => {
+                if e.kind == KeyEventKind::Release {
+                    continue;
                 }
-            },
-            _ => {}
+                key_to_command(e)
+            }
+            Event::Resize(_, _) => Ok(Command::Resize),
+            _ => Err(anyhow!("Unacceptable Key")),
+        };
+        return command;
+    }
+}
+
+fn key_to_command(key_event: KeyEvent) -> Result<Command> {
+    match key_event.code {
+        KeyCode::Char('p') => Ok(Command::ShowPath),
+        KeyCode::Char('u') => Ok(Command::Update),
+        KeyCode::Char('s') => Ok(Command::Shell),
+        KeyCode::Char('n') => Ok(Command::NewFile),
+        KeyCode::Char('N') => Ok(Command::NewFolder),
+        KeyCode::Char('r') => Ok(Command::Rename),
+        KeyCode::Char('m') => Ok(Command::Move),
+        KeyCode::Char('c') => Ok(Command::Copy),
+        KeyCode::Char('y') => Ok(Command::Sync),
+        KeyCode::Char('l') => Ok(Command::Link),
+        KeyCode::Enter => Ok(Command::Enter),
+        KeyCode::Tab => Ok(Command::OpenFolder),
+        KeyCode::Backspace => Ok(Command::Delete),
+        KeyCode::Esc => Ok(Command::Quit),
+        KeyCode::Left => Ok(Command::JumpUp),
+        KeyCode::Right => Ok(Command::JumpDown),
+        KeyCode::Down => Ok(Command::Down),
+        KeyCode::Up => Ok(Command::Up),
+        KeyCode::Char(c) => Err(anyhow!("Invalid Command: {}", c)),
+        _ => Err(anyhow!("Invalid Command: {:?}", key_event.code)),
+    }
+}
+
+// =====================================================================================
+// struct Job {
+//     command: Command,
+//     job_id: u16,
+//     node: String
+// }
+pub struct CommandRunner {
+    node_map: Arc<Mutex<NodeMap>>,
+    viewer: Arc<Mutex<Viewer>>,
+    config: Arc<Config>,
+    // jobs: Vec<Job>
+}
+
+impl CommandRunner{
+    pub fn new(node_map: Arc<Mutex<NodeMap>>, viewer: Arc<Mutex<Viewer>>, config: Arc<Config>) -> CommandRunner{
+        CommandRunner{
+            node_map: node_map,
+            viewer: viewer,
+            config: config,
+            // jobs: Vec::new()
         }
     }
 
-    Ok(())
-}
+    pub fn run_command(&mut self, command: Command) -> Result<()> {
+        match command {
+            Command::Enter => {self.open_file()?;},
+            Command::OpenFolder => {self.open_folder()?;},
+            Command::NewFile => {self.new_file()?;},
+            Command::NewFolder => {self.new_folder()?;},
+            Command::Copy => {self.copy()?;},
+            Command::Move => {self.move_()?;},
+            Command::Rename => {self.rename()?;},
+            Command::Delete => {self.delete()?;},
+            Command::ShowPath => {self.show_path()?;},
+            Command::Sync => {self.sync()?;},
+            Command::Link => {self.link()?;},
+            Command::Quit => {},
+            Command::Update => {self.update()?;},
+            Command::Shell => {},
+            Command::Resize => {self.resize()?;},
+            Command::Up => {self.up()?;},
+            Command::Down => {self.down()?},
+            Command::JumpUp => {self.jump_up()?;},
+            Command::JumpDown => {self.jump_down()?;},
+        }
+        return Ok(())
 
-pub fn rename(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let original_path = tree.get_path(route);
-
-    let new_name = type_from_console_stdin(viewer)?;
-
-    if new_name.len() == 0{
-        return Err(anyhow::anyhow!(ApplicationError::InputAbortedError))
-    }
-    let new_path_string = format!("{}/{}", (*original_path.parent().unwrap()).to_path_buf().to_string_lossy().into_owned(), new_name);
-
-    if Path::new(&new_path_string).exists(){
-        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
-    }
-
-    let result = cmd!("mv","-n", original_path, new_path_string.clone()).stderr_capture().run();
-
-    match result{
-        Ok(_)   => { viewer.set_console_msg(new_path_string, ConsoleMessageStatus::Normal);},
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("mv"))))}
-    }
-
-    update(tree, viewer)?;
-
-    Ok(())
-}
-
-pub fn new_file(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()>{
-
-    let route = viewer.get_cursor_route();
-    let mut parent_path = tree.get_path(route);
-
-    let new_file_name = type_from_console_stdin(viewer)?;
-
-    if new_file_name.len() == 0{
-        return Err(anyhow::anyhow!(ApplicationError::InputAbortedError))
     }
 
-    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
-    if parent_path.is_file(){
-        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
-    }
-    let new_file_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_file_name);
+    //入力用関数 ==============================================================================
+    fn select_directory_by_secondoly_cursor(&mut self, message: String) -> Result<PathBuf> {
+        loop {
+            let mut viewer = self.viewer.lock().unwrap();
+            viewer.activate_secondly_cursor();
+            viewer.set_console_message(message.clone(), ConsoleMessageStatus::Info);
+            viewer.sync()?;
+            viewer.display()?;
+            std::mem::drop(viewer);
 
-    if Path::new(&new_file_path_string).exists(){
-        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
-    }
+            match read_command() {
+                Ok(Command::Up) => {self.up()?},
+                Ok(Command::Down) => {self.down()?},
+                Ok(Command::JumpUp) => {self.jump_up()?},
+                Ok(Command::JumpDown) => {self.jump_down()?},
+                Ok(Command::Enter) => {
+                    let mut viewer = self.viewer.lock().unwrap();
+                    viewer.deactivate_secondly_cursor(); 
+                    break
+                },
+                Ok(Command::OpenFolder) => {self.open_folder()?;}
+                Ok(Command::Resize) => {self.resize()?;}
+                Ok(Command::Quit) => {
+                    let mut viewer = self.viewer.lock().unwrap();
+                    viewer.deactivate_secondly_cursor(); 
+                    return Err(anyhow!("Input aborted!"))
+                },
+                _ => {}
+            }
+        };
 
-    let result = cmd!("touch", new_file_path_string.clone()).stderr_capture().run();
 
-    match result{
-        Ok(_)   => { viewer.set_console_msg(new_file_path_string, ConsoleMessageStatus::Normal);},
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("touch")))) }
-    }
+        let node_map = self.node_map.lock().unwrap();
+        let viewer = self.viewer.lock().unwrap();
+        
+        // 移動先を取得 --------------------
+        let to_id = viewer.get_cursor_id();
+        let to_path = match node_map.get_path(&to_id){
+            Ok(path) => {
+                if path.is_dir() == false {
+                    path.parent().unwrap().to_path_buf()
+                }else {
+                    path
+                }
+            }
+            Err(e) => {return Err(e)}
+        };
 
-    update(tree, viewer)?;
-
-    Ok(())
-}
-
-pub fn new_folder(tree : &mut Box<Node>, viewer : &mut Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let mut parent_path = tree.get_path(route);
-
-    let new_folder_name = type_from_console_stdin(viewer)?;
-
-    if new_folder_name.len() == 0{
-        return Err(anyhow::anyhow!(ApplicationError::InputAbortedError))
-    }
-
-    //選択されているノードがファイルだったら，その親ノードの子にファイルを作成
-    if parent_path.is_file(){
-        parent_path = (*parent_path.parent().unwrap()).to_path_buf();
-    }
-    let new_folder_path_string = format!("{}/{}", parent_path.to_string_lossy().into_owned(), new_folder_name);
-
-    if Path::new(&new_folder_path_string).exists(){
-        return Err(anyhow::anyhow!(ApplicationError::AlreadyExistError))
-    }
-
-    let result = cmd!("mkdir", new_folder_path_string.clone()).stderr_capture().run();
-
-    match result{
-        Ok(_)   => { viewer.set_console_msg(new_folder_path_string, ConsoleMessageStatus::Normal);},
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("mkdir")))) }
-    }
-
-    update(tree, viewer)?;
-
-    Ok(())
-}
-
-pub fn open_file(tree : &Box<Node>, viewer : & Viewer) -> Result<()> {
-
-    let route = viewer.get_cursor_route();
-    let path = tree.get_path(route);
-
-    match viewer.get_cursor_node_type(){
-        NodeType::Folder => return Err(anyhow::anyhow!(format!("{} is directory", &path.to_string_lossy().into_owned()))),
-        NodeType::File   => {}
-    }
-    
-    let result = cmd!("rmate", path).stderr_capture().run();
-
-    match result{
-        Ok(_)   => { },
-        Err(_)  => { return Err(anyhow::anyhow!(ApplicationError::SubProcessCommandError(String::from("rmate")))) }
+        return Ok(to_path)
     }
 
-    Ok(())
-}
+    fn input(&mut self, message: String) -> Result<String> {
+        let mut buf = String::new();
+        loop {
+            let mut viewer = self.viewer.lock().unwrap();
+            viewer.set_console_message(format!("{}: {}", message, buf), ConsoleMessageStatus::Info);
+            viewer.display()?;
 
-pub fn open_folder(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
+            match read()? {
+                Event::Key(k) => {
+                    if k.kind == KeyEventKind::Release {
+                        continue
+                    }
+                    match k.code {
+                        KeyCode::Char(c) => {buf.push(c);},
+                        KeyCode::Backspace => {if buf.len() != 0 {let _ = buf.pop().unwrap();}}
+                        KeyCode::Esc => {return Err(anyhow!("Input aborted!"))}
+                        KeyCode::Enter => break,
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
 
-    let route = viewer.get_cursor_route();
+        Ok(buf)
+    } 
 
-    let path = tree.get_path(route.clone());
-    match viewer.get_cursor_node_type(){
-        NodeType::Folder => {},
-        NodeType::File   => return Err(anyhow::anyhow!(format!("{} is file", &path.to_string_lossy().into_owned()))),
-    }
-
-    let open_only = false;
-    tree.open_node(route, open_only);
-    Ok(())
-}
-
-pub fn open_folder_from_secondly_cursor(tree : &mut Box<Node>, viewer : &Viewer) -> Result<()> {
-
-    let route = viewer.get_secondly_cursor_route()?;
-
-    let path = tree.get_path(route.clone());
-    let node_type = viewer.get_secondly_cursor_node_type()?;
-    match node_type{
-        NodeType::Folder => {},
-        NodeType::File   => return Err(anyhow::anyhow!(format!("{} is file", &path.to_string_lossy().into_owned()))),
-    }
-
-    let open_only = true;
-    tree.open_node(route, open_only);
-    Ok(())
-}
-
-pub fn resize(viewer : &mut Viewer) -> Result<()> {
-
-    viewer.set_terminal_size();
-    Ok(())
-}
-
-//-----------------------------------------------------------------------------
-fn type_from_console_stdin(viewer : &mut Viewer) -> Result<String>{
-    
-    let mut new_name = String::new();
-    let console_msg_head = String::from("Enter : ");
-
-    let input_result =
-    loop{
-        let _console_msg = format!("{}{}",console_msg_head, new_name);
-        viewer.set_console_msg(_console_msg, ConsoleMessageStatus::Normal);
+    fn confirm(&mut self, message: String) -> Result<()> {
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("{}: Yes->ENTER / No->OTHER", message), 
+            ConsoleMessageStatus::Error
+        );
         viewer.display()?;
-
-        let _event = read()?;
-        match _event{
-            Event::Key(_e) =>{
-                match _e.code{
-                    KeyCode::Char(c) => {new_name.push(c);},
-                    KeyCode::Enter   => {viewer.clean_console();
-                                         break Ok(new_name)},
-                    KeyCode::Esc     => {new_name.clear();
-                                         break Err(anyhow::anyhow!(ApplicationError::InputAbortedError))}
-                    KeyCode::Backspace  => {if new_name.len() != 0 {let _ = new_name.pop().unwrap();}}
-                   _ => {}
-                }
-            },
-            _ => {}
+        
+        match read_command() {
+            Ok(Command::Enter) => return Ok(()),
+            _ => return Err(anyhow!("Cancelled!"))
         }
-    };
+    }
 
-    return input_result
-}
-
-fn get_path_from_secondly_cursor(tree: &mut Box<Node>, viewer : &mut Viewer) -> Result<PathBuf>{
-
-    viewer.activate_secondly_cursor();
-    let mut new_path = String::new();
-
-    let path_result = loop{
-        let _event = read()?;
-        match _event{
-            Event::Key(_e) =>{
-                match _e.code{
-                    KeyCode::Down    => {let _ = viewer.secondly_cursor_down();
-                                         let _route = viewer.get_secondly_cursor_route()?;
-                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
-                                        },
-                    KeyCode::Up      => {let _ = viewer.secondly_cursor_up();
-                                         let _route = viewer.get_secondly_cursor_route()?;
-                                         new_path = tree.get_path(_route).to_string_lossy().into_owned();
-                                        },
-                    KeyCode::Enter   => {let _route = viewer.get_secondly_cursor_route()?;
-                                         break Ok(tree.get_path(_route))
-                                        },
-                    KeyCode::Tab     => {let _ = open_folder_from_secondly_cursor(tree, viewer)?;}
-                    KeyCode::Esc     => {break Err(anyhow::anyhow!(ApplicationError::InputAbortedError));}
-                    KeyCode::Char(c) => {new_path.push(c);}
-                    KeyCode::Backspace  => {if new_path.len() != 0 {let _ = new_path.pop().unwrap();}}
-                   _ => {}
-                }
-            },
-            _ => {}
+    fn confirm_overwrite(&mut self, path: &PathBuf) -> Result<()> {
+        if path.exists() {
+            if self.config.skip_exist {
+                return Err(anyhow!("{:?} is already existed!", path))
+            }
+            self.confirm(format!("Overwrite?"))?;
         }
-        let _text = tree.format();
-        viewer.set_text(_text);
-        viewer.set_console_msg(new_path.clone(), ConsoleMessageStatus::Normal);
-        viewer.display()?;
-    };
-    
-    viewer.deactivate_secondly_cursor();
+        Ok(())
+    }
+    // ===================================================================================
 
-    return path_result
+    fn get_cursor_path(&self) -> Result<PathBuf> {
+        let viewer = self.viewer.lock().unwrap();
+        let node_map = self.node_map.lock().unwrap();
+        let id = viewer.get_cursor_id();
+        let path = node_map.get_path(&id)?;
+        return Ok(path)
+    }
+
+    // ↓ コマンドたち ↓ ======================================================================
+
+    // エディタでファイルを開く -------------------------
+    fn open_file(&mut self) -> Result<()> {
+        let path = self.get_cursor_path()?;
+        if path.is_file() == false {
+            return Err(anyhow!("Not file"))
+        }
+        cmd!(&self.config.editor_command, path).stderr_capture().run()?;
+        Ok(())
+    }
+
+    // フォルダを展開 ------------------------------
+    fn open_folder(&mut self) -> Result<()> {
+        let viewer = self.viewer.lock().unwrap();
+        let mut node_map = self.node_map.lock().unwrap();
+        let id = viewer.get_cursor_id();
+        let path = node_map.get_path(&id)?;
+
+        if path.is_dir() == false {
+            return Err(anyhow!("Not folder"))
+        }
+
+        node_map.open_and_close_node(&id)
+    }
+
+    //新しいファイルを作成 --------------------------
+    fn new_file(&mut self) -> Result<()> {
+        let file_name = self.input(String::from("Enter"))?;
+        let path = self.get_cursor_path()?;
+
+        let new_file_path = if path.is_dir() {
+            path.join(&file_name)
+        } else {
+            match path.parent(){
+                Some(p) => p.to_path_buf().join(&file_name),
+                None => return Err(anyhow!("Invalid path"))
+            }
+        };
+
+        // 上書きしますか
+        self.confirm_overwrite(&new_file_path)?;
+        
+        fs::File::create(&new_file_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("New file: {}", new_file_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // 新しいディレクトリを作成 -----------------------
+    fn new_folder(&mut self) -> Result<()> {
+        let dir_name = self.input(String::from("Enter"))?;
+        let path = self.get_cursor_path()?;
+
+        let new_dir_path = if path.is_dir() {
+            path.join(&dir_name)
+        } else {
+            match path.parent(){
+                Some(p) => p.to_path_buf().join(&dir_name),
+                None => return Err(anyhow!("Invalid path"))
+            }
+        };
+
+        // 上書きしますか
+        self.confirm_overwrite(&new_dir_path)?;
+        
+        fs::create_dir(&new_dir_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("New folder: {}", new_dir_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // コピー ------------------------------------
+    fn copy(&mut self) -> Result<()> {
+        let from_path = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let to_path_dir = self.select_directory_by_secondoly_cursor(format!("Copy from: {}", from_path.to_string_lossy()))?;
+        let file_name = from_path.file_name().unwrap();
+        let to_path = to_path_dir.join(file_name);
+
+
+        // 移動先のパスが既に存在しているとき
+        self.confirm_overwrite(&to_path)?;
+
+        // 実行 (上書きするかは確認しているので上書きオプションはtrue)
+        if from_path.is_dir() {
+            let mut option = fs_extra::dir::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::dir::copy(&from_path, &to_path, &option)?;
+        } else {
+            let mut option = fs_extra::file::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::file::copy(&from_path, &to_path, &option)?;
+        }
+
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Copy to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        Ok(())
+    }
+
+    // ファイルの移動 ------------------------------
+    fn move_(&mut self) -> Result<()> {
+        let from_path = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let to_path_dir = self.select_directory_by_secondoly_cursor(format!("Move from: {}", from_path.to_string_lossy()))?;
+        let file_name = from_path.file_name().unwrap();
+        let to_path = to_path_dir.join(file_name);
+
+        // 移動先のパスが既に存在しているかどうか
+        self.confirm_overwrite(&to_path)?;
+
+        // 実行 (上書きするかは確認しているので強制的に上書き)
+        if from_path.is_dir() {
+            let mut option = fs_extra::dir::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::dir::move_dir(&from_path, &to_path, &option)?;
+        } else {
+            let mut option = fs_extra::file::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::file::move_file(&from_path, &to_path, &option)?;
+        }
+
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Move to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        Ok(())
+    }
+
+    // 名前の変更 ---------------------------------------------------
+    fn rename(&mut self) -> Result<()> {
+        let new_name = self.input(String::from("Enter"))?;
+        let from_path = self.get_cursor_path()?;
+
+        let new_path = match from_path.parent(){
+            Some(p) => p.to_path_buf().join(&new_name),
+            None => return Err(anyhow!("Invalid path"))
+        };
+
+        self.confirm_overwrite(&new_path)?;
+        
+        fs::rename(&from_path, &new_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("Renamed: {}", new_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // 削除 --------------------------------------------------------
+    fn delete(&mut self) -> Result<()> {
+        let path = self.get_cursor_path()?;
+        self.confirm(format!("Remove {}?", path.to_string_lossy()))?;
+
+        // 削除
+        if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("Removed: {}", path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // パスを表示 ----------------------------------------------------
+    fn show_path(&mut self) -> Result<()> {
+        let node_map = self.node_map.lock().unwrap();
+        let mut viewer = self.viewer.lock().unwrap();
+        let id = viewer.get_cursor_id();
+        let path = node_map.get_path(&id)?;
+        let path_string = path.to_string_lossy().into_owned();
+        viewer.set_console_message(path_string, ConsoleMessageStatus::Info);
+        Ok(())
+    }
+
+    // 別のシェルのカレントディレクトリを同期 -------------------------------------
+    fn sync(&mut self) -> Result<()> {
+        // let node_map = self.node_map.lock().unwrap();
+        // let mut viewer = self.viewer.lock().unwrap();
+        // let id = viewer.get_cursor_id();
+        // let path = node_map.get_path(&id)?;
+        // // shell_command::export(path_string, self.cfg.export_variable_name);
+        // viewer.set_console_message(format!("{}", path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        // Ok(())
+        Ok(())
+    }
+
+    // シンボリックリンクを作成 ----------------------------------------
+    fn link(&mut self) -> Result<()> {
+        #[cfg(unix)] // Unix系システム（Linux、macOSなど）
+        fn create_symlink(source: &PathBuf, dest: &PathBuf) -> Result<()> {
+            use std::os::unix::fs::symlink;
+            symlink(source, dest)?;
+            Ok(())
+        }
+
+        #[cfg(windows)] // Windowsシステム用
+        fn create_symlink(source: &PathBuf, dest: &PathBuf) -> Result<()> {
+            use std::os::windows::fs::symlink_file;
+            symlink_file(source, dest)?;
+            Ok(())
+        }
+
+        let source = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let dest_dir = self.select_directory_by_secondoly_cursor(format!("Link {}", source.to_string_lossy()))?;
+        let file_name = source.file_name().unwrap();
+        let dest = dest_dir.join(file_name);
+
+        // 移動先のパスが既に存在しているかどうか
+        self.confirm_overwrite(&dest)?;
+
+        create_symlink(&source, &dest)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Linked: {}", dest.to_string_lossy()), ConsoleMessageStatus::Notify);
+        Ok(())
+    }
+
+    // ツリーを更新 -------------------------------------------------
+    fn update(&mut self) -> Result<()> {
+        let mut node_map = self.node_map.lock().unwrap();
+        node_map.update()
+    }
+
+    // 画面のリサイズ -----------------------------------------------
+    fn resize(&mut self) -> Result<()> {
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.resize()
+    }
+
+    // カーソルを上へ -----------------------------------------------
+    fn up(&mut self) -> Result<()> {
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.cursor_up();
+        Ok(())
+    }
+
+    // カーソルを下へ -----------------------------------------------
+    fn down(&mut self) -> Result<()> {
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.cursor_down();
+        Ok(())
+    }
+
+    // カーソルを上の階層へ -----------------------------------------
+    fn jump_up(&mut self) -> Result<()>{
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.cursor_jump_up()
+    }
+
+    // カーソルを下の階層へ ------------------------------------------
+    fn jump_down(&mut self) -> Result<()>{
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.cursor_jump_down()
+    }
 }
-
