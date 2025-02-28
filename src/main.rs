@@ -52,9 +52,10 @@ fn init_logger(level: LevelFilter, filename: &str) -> Result<()> {
 }
 
 #[derive(Parser)]
+#[command(version, about)]
 struct Args {
-    #[arg(short, long, value_parser)]
+    #[arg(short, long, value_parser, help="Specify root path of sidebar")]
     path: Option<PathBuf>,
-    #[arg(short, long)]
+    #[arg(short, long, help="Synchronize current working directory with another sidebar")]
     sync: bool,
 }
