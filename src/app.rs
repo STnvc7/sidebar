@@ -58,6 +58,8 @@ impl App {
                     command
                 }
             };
+            log::info!("Command accepted: {:?}", command);
+
             // command runner内でviewerをborrowするのでこのスコープ内ではドロップ
             std::mem::drop(viewer);
 

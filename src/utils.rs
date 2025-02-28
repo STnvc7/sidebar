@@ -4,12 +4,18 @@ pub mod path {
     use path_absolutize::Absolutize;
     use std::env;
     use std::path::{Path, PathBuf};
+    use std::fs;
 
     pub fn get_application_root() -> Result<PathBuf> {
-        match dir::home_dir() {
-            Some(path) => Ok(path.join(".sidebar")),
+        let app_root = match dir::home_dir() {
+            Some(path) => path.join(".sidebar"),
             None => return Err(anyhow!("Impossible to get your home dir!"))
+        };
+        if app_root.exists() == false {
+            fs::create_dir_all(&app_root)?;
         }
+
+        return Ok(app_root)
     }
 
     pub fn get_cwd_path() -> Result<PathBuf> {

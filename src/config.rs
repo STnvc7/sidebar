@@ -20,15 +20,15 @@ pub struct Config {
 }
 
 pub fn load_config() -> Result<Config> {
-    // let root = get_application_root()?;
-    // let config_path = root.join("config.yaml");
+    let root = get_application_root()?;
+    let config_path = root.join("config.yaml");
 
     // テストのときは配下のコンフィグ
-    let config_path = Path::new("./config.yaml");
+    // let config_path = Path::new("./config.yaml");
 
     if config_path.exists() {
-        let config_json = fs::read_to_string(config_path)?;
-        let config = serde_yaml::from_str(&config_json)?;
+        let config_yaml = fs::read_to_string(config_path)?;
+        let config = serde_yaml::from_str(&config_yaml)?;
         return Ok(config)
     } else{
         let config = Config{
