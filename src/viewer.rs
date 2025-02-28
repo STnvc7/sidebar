@@ -85,7 +85,7 @@ impl Viewer {
 
     // コンソールメッセージを保存
     pub fn set_console_message(&mut self, message: String, status: ConsoleMessageStatus) {
-        let prefix = String::from(" > ");
+        let prefix = String::from("> ");
         let msg = format!("{}{}", prefix, message);
         self.console_message = Some(ConsoleMessage::new(msg, status));
     }
@@ -290,6 +290,9 @@ impl Viewer {
                 }
                 NodeType::File => {
                     icon::get_file_icon(&name, self.config.nerd_font)
+                }
+                NodeType::Unknown => {
+                    String::from("?")
                 }
             };
             let color = self.get_line_color(i);

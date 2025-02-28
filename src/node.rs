@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use std::cmp::Ordering;
 use uuid::Uuid;
-use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum NodeType {
     Folder,
     File,
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -21,12 +21,8 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(id: Uuid, path: PathBuf, node_type: NodeType, rank: usize) -> Result<Node> {
-        if path.exists() == false {
-            return Err(anyhow!("{:?} does not exist!", path))
-        }
-        
-        Ok(Node {
+    pub fn new(id: Uuid, path: PathBuf, node_type: NodeType, rank: usize) -> Node {
+        Node {
             id: id,
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
             path: path,
@@ -34,7 +30,7 @@ impl Node {
             rank: rank,
             children: None,
             is_open: false,
-        })
+        }
     }
 
     pub fn sort_fn(a: &Node, b: &Node) -> Ordering {

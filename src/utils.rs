@@ -41,7 +41,10 @@ pub mod path {
 
     pub fn get_file_type<P: AsRef<Path>>(path: P) -> Result<NodeType> {
         let resolved_path = resolve_path(path)?;
-
+        if resolved_path.exists() == false {
+            return Ok(NodeType::Unknown)
+        }
+        
         if resolved_path.is_dir() == true {
             return Ok(NodeType::Folder);
         } else if resolved_path.is_file() == true {

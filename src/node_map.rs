@@ -26,18 +26,18 @@ impl NodeMap {
     // ----------------------------------------------------------------
     // コンストラクタ
     // ----------------------------------------------------------------
-    pub fn new(root: PathBuf, config: Arc<Config>) -> Result<NodeMap> {
+    pub fn new(root: PathBuf, config: Arc<Config>) -> NodeMap {
         let root_id = Uuid::new_v4();
-        let root_node = Node::new(root_id.clone(), root, NodeType::Folder, 0)?;
+        let root_node = Node::new(root_id.clone(), root, NodeType::Folder, 0);
 
         let mut node_map: HashMap<Uuid, Node> = HashMap::new();
         node_map.insert(root_id.clone(), root_node);
 
-        return Ok(NodeMap {
+        return NodeMap {
             node_map: node_map,
             root_id: root_id,
             config: config,
-        })
+        }
     }
 
     // ----------------------------------------------------------------
@@ -102,7 +102,7 @@ impl NodeMap {
                 _path.clone(), 
                 _file_type.clone(), 
                 parent_rank + 1
-            )?;
+            );
 
             self.node_map.insert(_id.clone(), _child);
             children_ids.push(_id)
@@ -183,7 +183,7 @@ impl NodeMap {
                     path.to_path_buf(), 
                     file_type.clone(), 
                     parent_rank + 1
-                )?;
+                );
 
                 self.node_map.insert(_id.clone(), _child);
                 new_ids.push(_id);

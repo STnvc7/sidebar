@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         Some(p) => resolve_path(p)?,
         None => get_cwd_path()? 
     };
-    let mut app = App::new(path, config)?;
+    let mut app = App::new(path, config);
     app.run()?;
     log::info!("Close application!");
     Ok(())

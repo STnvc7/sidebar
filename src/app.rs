@@ -23,17 +23,17 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(root: PathBuf, config: Config) -> Result<App> {
+    pub fn new(root: PathBuf, config: Config) -> App {
         let config = Arc::new(config);
-        let node_map = Arc::new(Mutex::new(NodeMap::new(root, config.clone())?));
+        let node_map = Arc::new(Mutex::new(NodeMap::new(root, config.clone())));
         let viewer = Arc::new(Mutex::new(Viewer::new(node_map.clone(), config.clone())));
         let command_runner = CommandRunner::new(node_map.clone(), viewer.clone(), config.clone());
-        Ok(App {
+        App {
             node_map: node_map,
             viewer: viewer,
             command_runner: command_runner,
             config: config,
-        })
+        }
     }
 
     pub fn run(&mut self) -> Result<()> {
