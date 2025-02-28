@@ -5,9 +5,7 @@ use crate::node_map::NodeMap;
 use crate::config::Config;
 
 use anyhow::Result;
-use std::cell::RefCell;
 use std::io::{stdout, Write};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
@@ -21,7 +19,7 @@ use crossterm::{queue, terminal};
 pub enum ConsoleMessageStatus{
     Info,
     Error,
-    Notify
+    Notify,
 }
 #[derive(Debug)]
 struct ConsoleMessage{
@@ -36,7 +34,7 @@ impl ConsoleMessage{
         }
     }
     fn get_num_lines(&self, terminal_width: usize) -> usize {
-        return self.message.len().div_ceil(terminal_width) + 1;
+        return self.message.len().div_ceil(terminal_width);
     }
 
 }
@@ -87,7 +85,9 @@ impl Viewer {
 
     // コンソールメッセージを保存
     pub fn set_console_message(&mut self, message: String, status: ConsoleMessageStatus) {
-        self.console_message = Some(ConsoleMessage::new(message, status));
+        let prefix = String::from(" > ");
+        let msg = format!("{}{}", prefix, message);
+        self.console_message = Some(ConsoleMessage::new(msg, status));
     }
     pub fn clear_console_message(&mut self) {
         self.console_message = None
@@ -285,7 +285,7 @@ impl Viewer {
             let node_type = node_map.get_node_type(&id)?;
             let icon = match node_type {
                 NodeType::Folder => {
-                    let is_open = node_map.has_children(&id)?;
+                    let is_open = node_map.get_is_open(&id)?;
                     icon::get_folder_icon(is_open, self.config.nerd_font)
                 }
                 NodeType::File => {
@@ -307,16 +307,22 @@ impl Viewer {
 
             // 綺麗に表示する用
             let num_line = console_msg.get_num_lines(self.terminal_width);
-            let blank = String::from(" ").repeat(self.terminal_width - message.len().rem_euclid(self.terminal_width));
+            let blank = if message.len().rem_euclid(self.terminal_width) != 0 {
+                String::from(" ").repeat(
+                    self.terminal_width - message.len().rem_euclid(self.terminal_width)
+                )
+            } else {
+                String::from("")
+            };
             let color = match status{
-                ConsoleMessageStatus::Info => COLOR::back::CYAN,
+                ConsoleMessageStatus::Info => COLOR::back::BLUE,
                 ConsoleMessageStatus::Error => COLOR::back::RED,
                 ConsoleMessageStatus::Notify => COLOR::back::GREEN,
             };
-
+            
             queue!(
                 stdout(), 
-                MoveTo(0, (self.terminal_height - num_line) as u16), 
+                MoveTo(0, (self.terminal_height - num_line - 1) as u16), 
                 Clear(ClearType::FromCursorDown), 
                 MoveDown(1), 
                 Print(format!("{}{}{}{}", color, message, blank, COLOR::RESET))

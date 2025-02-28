@@ -1,19 +1,21 @@
 #![allow(unused_imports)]
 
 use anyhow::{anyhow, Result};
+use duct::cmd;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyEventKind};
 use log;
 use std::sync::{Mutex, Arc};
 use std::fs;
+use std::path::PathBuf;
+use fs_extra;
 
 use crate::node_map::NodeMap;
 use crate::viewer::{Viewer, ConsoleMessageStatus};
 use crate::config::Config;
-use crate::shell_command;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    OpenFile,
+    Enter,
     OpenFolder,
     NewFile,
     NewFolder,
@@ -22,7 +24,7 @@ pub enum Command {
     Rename,
     Delete,
     ShowPath,
-    ExportPath,
+    Sync,
     Link,
     Quit,
     Update,
@@ -47,7 +49,7 @@ pub fn read_command() -> Result<Command> {
                 key_to_command(e)
             }
             Event::Resize(_, _) => Ok(Command::Resize),
-            _ => Err(anyhow!(" > Unacceptable Key")),
+            _ => Err(anyhow!("Unacceptable Key")),
         };
         return command;
     }
@@ -63,9 +65,9 @@ fn key_to_command(key_event: KeyEvent) -> Result<Command> {
         KeyCode::Char('r') => Ok(Command::Rename),
         KeyCode::Char('m') => Ok(Command::Move),
         KeyCode::Char('c') => Ok(Command::Copy),
-        KeyCode::Char('e') => Ok(Command::ExportPath),
+        KeyCode::Char('y') => Ok(Command::Sync),
         KeyCode::Char('l') => Ok(Command::Link),
-        KeyCode::Enter => Ok(Command::OpenFile),
+        KeyCode::Enter => Ok(Command::Enter),
         KeyCode::Tab => Ok(Command::OpenFolder),
         KeyCode::Backspace => Ok(Command::Delete),
         KeyCode::Esc => Ok(Command::Quit),
@@ -73,8 +75,8 @@ fn key_to_command(key_event: KeyEvent) -> Result<Command> {
         KeyCode::Right => Ok(Command::JumpDown),
         KeyCode::Down => Ok(Command::Down),
         KeyCode::Up => Ok(Command::Up),
-        KeyCode::Char(c) => Err(anyhow!(" > Invalid Command: {}", c)),
-        _ => Err(anyhow!(" > Invalid Command: {:?}", key_event.code)),
+        KeyCode::Char(c) => Err(anyhow!("Invalid Command: {}", c)),
+        _ => Err(anyhow!("Invalid Command: {:?}", key_event.code)),
     }
 }
 
@@ -103,87 +105,46 @@ impl CommandRunner{
 
     pub fn run_command(&mut self, command: Command) -> Result<()> {
         match command {
-            Command::OpenFile => self.open_file(),
-            Command::OpenFolder => self.open_folder(),
-            Command::NewFile => self.new_file(),
-            Command::NewFolder => self.new_folder(),
-            Command::Copy => self.copy(),
-            Command::Move => {
-                self.move_()?;
-                self.update()
-            }
-            Command::Rename => self.rename(),
-            Command::Delete => self.delete(),
-            Command::ShowPath => self.show_path(),
-            Command::ExportPath => self.export_path(),
-            Command::Link => self.link(),
-            Command::Quit => Ok(()),
-            Command::Update => self.update(),
-            Command::Shell => Ok(()),
-            Command::Resize => self.resize(),
-            Command::Up => self.up(),
-            Command::Down => self.down(),
-            Command::JumpUp => self.jump_up(),
-            Command::JumpDown => self.jump_down(),
+            Command::Enter => {self.open_file()?;},
+            Command::OpenFolder => {self.open_folder()?;},
+            Command::NewFile => {self.new_file()?;},
+            Command::NewFolder => {self.new_folder()?;},
+            Command::Copy => {self.copy()?;},
+            Command::Move => {self.move_()?;},
+            Command::Rename => {self.rename()?;},
+            Command::Delete => {self.delete()?;},
+            Command::ShowPath => {self.show_path()?;},
+            Command::Sync => {self.sync()?;},
+            Command::Link => {self.link()?;},
+            Command::Quit => {},
+            Command::Update => {self.update()?;},
+            Command::Shell => {},
+            Command::Resize => {self.resize()?;},
+            Command::Up => {self.up()?;},
+            Command::Down => {self.down()?},
+            Command::JumpUp => {self.jump_up()?;},
+            Command::JumpDown => {self.jump_down()?;},
         }
+        return Ok(())
+
     }
 
-    // エディタでファイルを開く -------------------------
-    fn open_file(&mut self) -> Result<()> {
-        let viewer = self.viewer.lock().unwrap();
-        let node_map = self.node_map.lock().unwrap();
-        let id = viewer.get_cursor_id();
-        let path = node_map.get_path(&id)?;
-        shell_command::open_file(&path, &self.config.editor_command)
-    }
-
-    // フォルダを展開 ------------------------------
-    fn open_folder(&mut self) -> Result<()> {
-        let viewer = self.viewer.lock().unwrap();
-        let mut node_map = self.node_map.lock().unwrap();
-        let id = viewer.get_cursor_id();
-        node_map.open_and_close_node(&id)
-    }
-
-    //新しいファイルを作成 --------------------------
-    fn new_file(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    // 新しいディレクトリを作成 -----------------------
-    fn new_folder(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    // コピー ------------------------------------
-    fn copy(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    // ファイルの移動 ------------------------------
-    fn move_(&mut self) -> Result<()> {
-        let mut viewer = self.viewer.lock().unwrap();
-        let node_map = self.node_map.lock().unwrap();
-
-        // 移動元のパスを取得
-        let from_id = viewer.get_cursor_id();
-        let from_path = node_map.get_path(&from_id)?;
-
-        viewer.activate_secondly_cursor();
-
-        // 一旦RefCellのやつをドロップ
-        std::mem::drop(viewer);
-        std::mem::drop(node_map);
-
-        // 移動先を入力する
+    //入力用関数 ==============================================================================
+    fn select_directory_by_secondoly_cursor(&mut self, message: String) -> Result<PathBuf> {
         loop {
-            let command = read_command();
-            match command {
+            let mut viewer = self.viewer.lock().unwrap();
+            viewer.activate_secondly_cursor();
+            viewer.set_console_message(message.clone(), ConsoleMessageStatus::Info);
+            viewer.sync()?;
+            viewer.display()?;
+            std::mem::drop(viewer);
+
+            match read_command() {
                 Ok(Command::Up) => {self.up()?},
                 Ok(Command::Down) => {self.down()?},
                 Ok(Command::JumpUp) => {self.jump_up()?},
                 Ok(Command::JumpDown) => {self.jump_down()?},
-                Ok(Command::OpenFile) => {
+                Ok(Command::Enter) => {
                     let mut viewer = self.viewer.lock().unwrap();
                     viewer.deactivate_secondly_cursor(); 
                     break
@@ -193,23 +154,19 @@ impl CommandRunner{
                 Ok(Command::Quit) => {
                     let mut viewer = self.viewer.lock().unwrap();
                     viewer.deactivate_secondly_cursor(); 
-                    return Err(anyhow!("> Input aborted!"))
+                    return Err(anyhow!("Input aborted!"))
                 },
                 _ => {}
             }
-            let mut viewer = self.viewer.lock().unwrap();
-            viewer.set_console_message(format!("> Move from: {}", from_path.to_string_lossy()), ConsoleMessageStatus::Info);
-            viewer.sync()?;
-            viewer.display()?;
         };
 
 
         let node_map = self.node_map.lock().unwrap();
-        let mut viewer = self.viewer.lock().unwrap();
+        let viewer = self.viewer.lock().unwrap();
         
         // 移動先を取得 --------------------
         let to_id = viewer.get_cursor_id();
-        let mut to_path = match node_map.get_path(&to_id){
+        let to_path = match node_map.get_path(&to_id){
             Ok(path) => {
                 if path.is_dir() == false {
                     path.parent().unwrap().to_path_buf()
@@ -219,23 +176,242 @@ impl CommandRunner{
             }
             Err(e) => {return Err(e)}
         };
-        // 
-        let file_name = from_path.file_name().unwrap();
-        to_path.push(file_name);
 
-        // 実行
-        fs::rename(&from_path, &to_path)?;
-        viewer.set_console_message(format!("> Move to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        return Ok(to_path)
+    }
+
+    fn input(&mut self, message: String) -> Result<String> {
+        let mut buf = String::new();
+        loop {
+            let mut viewer = self.viewer.lock().unwrap();
+            viewer.set_console_message(format!("{}: {}", message, buf), ConsoleMessageStatus::Info);
+            viewer.display()?;
+
+            match read()? {
+                Event::Key(k) => {
+                    if k.kind == KeyEventKind::Release {
+                        continue
+                    }
+                    match k.code {
+                        KeyCode::Char(c) => {buf.push(c);},
+                        KeyCode::Backspace => {if buf.len() != 0 {let _ = buf.pop().unwrap();}}
+                        KeyCode::Esc => {return Err(anyhow!("Input aborted!"))}
+                        KeyCode::Enter => break,
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(buf)
+    } 
+
+    fn confirm(&mut self, message: String) -> Result<()> {
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("{}: Yes->ENTER / No->OTHER", message), 
+            ConsoleMessageStatus::Error
+        );
+        viewer.display()?;
+        
+        match read_command() {
+            Ok(Command::Enter) => return Ok(()),
+            _ => return Err(anyhow!("Cancelled!"))
+        }
+    }
+
+    fn confirm_overwrite(&mut self, path: &PathBuf) -> Result<()> {
+        if path.exists() {
+            if self.config.skip_exist {
+                return Err(anyhow!("{:?} is already existed!", path))
+            }
+            self.confirm(format!("Overwrite?"))?;
+        }
+        Ok(())
+    }
+    // ===================================================================================
+
+    fn get_cursor_path(&self) -> Result<PathBuf> {
+        let viewer = self.viewer.lock().unwrap();
+        let node_map = self.node_map.lock().unwrap();
+        let id = viewer.get_cursor_id();
+        let path = node_map.get_path(&id)?;
+        return Ok(path)
+    }
+
+    // ↓ コマンドたち ↓ ======================================================================
+
+    // エディタでファイルを開く -------------------------
+    fn open_file(&mut self) -> Result<()> {
+        let path = self.get_cursor_path()?;
+        if path.is_file() == false {
+            return Err(anyhow!("Not file"))
+        }
+        cmd!(&self.config.editor_command, path).stderr_capture().run()?;
+        Ok(())
+    }
+
+    // フォルダを展開 ------------------------------
+    fn open_folder(&mut self) -> Result<()> {
+        let viewer = self.viewer.lock().unwrap();
+        let mut node_map = self.node_map.lock().unwrap();
+        let id = viewer.get_cursor_id();
+        let path = node_map.get_path(&id)?;
+
+        if path.is_dir() == false {
+            return Err(anyhow!("Not folder"))
+        }
+
+        node_map.open_and_close_node(&id)
+    }
+
+    //新しいファイルを作成 --------------------------
+    fn new_file(&mut self) -> Result<()> {
+        let file_name = self.input(String::from("Enter"))?;
+        let path = self.get_cursor_path()?;
+
+        let new_file_path = if path.is_dir() {
+            path.join(&file_name)
+        } else {
+            match path.parent(){
+                Some(p) => p.to_path_buf().join(&file_name),
+                None => return Err(anyhow!("Invalid path"))
+            }
+        };
+
+        // 上書きしますか
+        self.confirm_overwrite(&new_file_path)?;
+        
+        fs::File::create(&new_file_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("New file: {}", new_file_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // 新しいディレクトリを作成 -----------------------
+    fn new_folder(&mut self) -> Result<()> {
+        let dir_name = self.input(String::from("Enter"))?;
+        let path = self.get_cursor_path()?;
+
+        let new_dir_path = if path.is_dir() {
+            path.join(&dir_name)
+        } else {
+            match path.parent(){
+                Some(p) => p.to_path_buf().join(&dir_name),
+                None => return Err(anyhow!("Invalid path"))
+            }
+        };
+
+        // 上書きしますか
+        self.confirm_overwrite(&new_dir_path)?;
+        
+        fs::create_dir(&new_dir_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("New folder: {}", new_dir_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
+        Ok(())
+    }
+
+    // コピー ------------------------------------
+    fn copy(&mut self) -> Result<()> {
+        let from_path = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let to_path_dir = self.select_directory_by_secondoly_cursor(format!("Copy from: {}", from_path.to_string_lossy()))?;
+        let file_name = from_path.file_name().unwrap();
+        let to_path = to_path_dir.join(file_name);
+
+
+        // 移動先のパスが既に存在しているとき
+        self.confirm_overwrite(&to_path)?;
+
+        // 実行 (上書きするかは確認しているので上書きオプションはtrue)
+        if from_path.is_dir() {
+            let mut option = fs_extra::dir::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::dir::copy(&from_path, &to_path, &option)?;
+        } else {
+            let mut option = fs_extra::file::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::file::copy(&from_path, &to_path, &option)?;
+        }
+
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Copy to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        Ok(())
+    }
+
+    // ファイルの移動 ------------------------------
+    fn move_(&mut self) -> Result<()> {
+        let from_path = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let to_path_dir = self.select_directory_by_secondoly_cursor(format!("Move from: {}", from_path.to_string_lossy()))?;
+        let file_name = from_path.file_name().unwrap();
+        let to_path = to_path_dir.join(file_name);
+
+        // 移動先のパスが既に存在しているかどうか
+        self.confirm_overwrite(&to_path)?;
+
+        // 実行 (上書きするかは確認しているので強制的に上書き)
+        if from_path.is_dir() {
+            let mut option = fs_extra::dir::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::dir::move_dir(&from_path, &to_path, &option)?;
+        } else {
+            let mut option = fs_extra::file::CopyOptions::new();
+            option.overwrite = true;
+            fs_extra::file::move_file(&from_path, &to_path, &option)?;
+        }
+
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Move to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
         Ok(())
     }
 
     // 名前の変更 ---------------------------------------------------
     fn rename(&mut self) -> Result<()> {
+        let new_name = self.input(String::from("Enter"))?;
+        let from_path = self.get_cursor_path()?;
+
+        let new_path = match from_path.parent(){
+            Some(p) => p.to_path_buf().join(&new_name),
+            None => return Err(anyhow!("Invalid path"))
+        };
+
+        self.confirm_overwrite(&new_path)?;
+        
+        fs::rename(&from_path, &new_path)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("Renamed: {}", new_path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
         Ok(())
     }
 
     // 削除 --------------------------------------------------------
     fn delete(&mut self) -> Result<()> {
+        let path = self.get_cursor_path()?;
+        self.confirm(format!("Remove {}?", path.to_string_lossy()))?;
+
+        // 削除
+        if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(
+            format!("Removed: {}", path.to_string_lossy()), 
+            ConsoleMessageStatus::Notify
+        );
         Ok(())
     }
 
@@ -250,20 +426,47 @@ impl CommandRunner{
         Ok(())
     }
 
-    // パスを環境変数にエクスポート -------------------------------------
-    fn export_path(&mut self) -> Result<()> {
-        let node_map = self.node_map.lock().unwrap();
-        let mut viewer = self.viewer.lock().unwrap();
-        let id = viewer.get_cursor_id();
-        let path = node_map.get_path(&id)?;
-        let path_string = path.to_string_lossy().into_owned();
-        // shell_command::export(path_string, self.cfg.export_variable_name);
-        viewer.set_console_message(path_string, ConsoleMessageStatus::Notify);
+    // 別のシェルのカレントディレクトリを同期 -------------------------------------
+    fn sync(&mut self) -> Result<()> {
+        // let node_map = self.node_map.lock().unwrap();
+        // let mut viewer = self.viewer.lock().unwrap();
+        // let id = viewer.get_cursor_id();
+        // let path = node_map.get_path(&id)?;
+        // // shell_command::export(path_string, self.cfg.export_variable_name);
+        // viewer.set_console_message(format!("{}", path.to_string_lossy()), ConsoleMessageStatus::Notify);
+        // Ok(())
         Ok(())
     }
 
     // シンボリックリンクを作成 ----------------------------------------
     fn link(&mut self) -> Result<()> {
+        #[cfg(unix)] // Unix系システム（Linux、macOSなど）
+        fn create_symlink(source: &PathBuf, dest: &PathBuf) -> Result<()> {
+            use std::os::unix::fs::symlink;
+            symlink(source, dest)?;
+            Ok(())
+        }
+
+        #[cfg(windows)] // Windowsシステム用
+        fn create_symlink(source: &PathBuf, dest: &PathBuf) -> Result<()> {
+            use std::os::windows::fs::symlink_file;
+            symlink_file(source, dest)?;
+            Ok(())
+        }
+
+        let source = self.get_cursor_path()?;
+
+        // 移動先を入力する
+        let dest_dir = self.select_directory_by_secondoly_cursor(format!("Link {}", source.to_string_lossy()))?;
+        let file_name = source.file_name().unwrap();
+        let dest = dest_dir.join(file_name);
+
+        // 移動先のパスが既に存在しているかどうか
+        self.confirm_overwrite(&dest)?;
+
+        create_symlink(&source, &dest)?;
+        let mut viewer = self.viewer.lock().unwrap();
+        viewer.set_console_message(format!("Linked: {}", dest.to_string_lossy()), ConsoleMessageStatus::Notify);
         Ok(())
     }
 

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::cmp::Ordering;
 use uuid::Uuid;
+use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum NodeType {
@@ -16,18 +17,24 @@ pub struct Node {
     node_type: NodeType,
     rank: usize,
     children: Option<Vec<Uuid>>,
+    is_open: bool,
 }
 
 impl Node {
-    pub fn new(id: Uuid, path: PathBuf, node_type: NodeType, rank: usize) -> Node {
-        Node {
+    pub fn new(id: Uuid, path: PathBuf, node_type: NodeType, rank: usize) -> Result<Node> {
+        if path.exists() == false {
+            return Err(anyhow!("{:?} does not exist!", path))
+        }
+        
+        Ok(Node {
             id: id,
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
             path: path,
             node_type: node_type,
             rank: rank,
             children: None,
-        }
+            is_open: false,
+        })
     }
 
     pub fn sort_fn(a: &Node, b: &Node) -> Ordering {
@@ -70,10 +77,16 @@ impl Node {
     pub fn get_node_type(&self) -> NodeType {
         self.node_type.clone()
     }
+    pub fn get_is_open(&self) -> bool {
+        self.is_open
+    }
     pub fn get_children_ids(&self) -> Option<Vec<Uuid>> {
         self.children.clone()
     }
     pub fn set_children_ids(&mut self, children: Option<Vec<Uuid>>) {
         self.children = children;
+    }
+    pub fn set_is_open(&mut self, is_open: bool) {
+        self.is_open = is_open;
     }
 }
