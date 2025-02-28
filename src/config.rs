@@ -4,7 +4,7 @@ use dir;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::io::{self, Write};
 use crate::utils::path::get_application_root;
 
@@ -20,11 +20,13 @@ pub struct Config {
 }
 
 pub fn load_config() -> Result<Config> {
-    let root = get_application_root()?;
-    let config_path = root.join("config.yaml");
-
-    // テストのときは配下のコンフィグ
-    // let config_path = Path::new("./config.yaml");
+    
+    let config_path = if cfg!(debug_assertions) {
+        PathBuf::from("./config.yaml")
+    } else {
+        let root = get_application_root()?;
+        root.join("config.yaml")
+    };
 
     if config_path.exists() {
         let config_yaml = fs::read_to_string(config_path)?;

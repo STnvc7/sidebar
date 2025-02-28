@@ -1,1 +1,12 @@
-07:57:03 [INFO] "/home/abelab/k_hiro/.sidebar/config.yaml"
+14:58:36 [INFO] Application start!
+14:58:36 [INFO] Config: Config { sync_server: true, editor_command: "subl", ignore: [".*"], nerd_font: true, skip_exist: true, saving_memory: true, auto_update: true }
+14:58:36 [INFO] Arguments: Args { path: None, sync: false }
+14:58:36 [INFO] Command accepted: Resize
+14:58:37 [INFO] Command accepted: OpenFolder
+14:58:38 [INFO] Command accepted: Down
+14:58:38 [INFO] Command accepted: Down
+14:58:38 [INFO] Command accepted: Down
+14:58:38 [INFO] Command accepted: Down
+14:58:39 [INFO] Command accepted: Down
+14:58:39 [INFO] Command accepted: Down
+14:58:40 [INFO] Close application!

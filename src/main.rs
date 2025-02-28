@@ -45,8 +45,13 @@ async fn main() -> Result<()> {
 }
 
 fn init_logger(level: LevelFilter) -> Result<()> {
-    let root = get_application_root()?;
-    let log_path = root.join("app.log");
+    let log_path = if cfg!(debug_assertions) {
+        PathBuf::from("./app.log")
+    } else {
+        let root = get_application_root()?;
+        root.join("app.log")       
+    };
+
     WriteLogger::init(
         level,
         simplelog::Config::default(),

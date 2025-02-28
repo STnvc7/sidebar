@@ -1,4 +1,5 @@
-#[allow(dead_code)]
+use crate::color;
+
 enum IconType {
     Python,
     Rust,
@@ -34,9 +35,9 @@ enum IconType {
 pub fn get_folder_icon(is_open: bool, nerd_font: bool) -> String {
     if nerd_font {
         if is_open {
-            return String::from("\u{f115}")
+            return format!("{}{}{}", color::front::YELLOW, "\u{f115}", color::RESET)
         }else {
-            return String::from("\u{f114}")
+            return format!("{}{}{}", color::front::YELLOW, "\u{f114}", color::RESET)
         }
     }else {
         if is_open {
@@ -88,7 +89,7 @@ pub fn get_file_icon(name: &String, nerd_font: bool) -> String {
         IconType::Other => "\u{e64e}"
     };
 
-    return String::from(icon);
+    return String::from(icon)
 }
 
 fn get_file_icon_type(name: &String) -> IconType {
