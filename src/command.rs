@@ -165,19 +165,19 @@ impl CommandRunner{
         let viewer = self.viewer.lock().unwrap();
         
         // 移動先を取得 --------------------
-        let to_id = viewer.get_cursor_id();
-        let to_path = match node_map.get_path(&to_id){
-            Ok(path) => {
-                if path.is_dir() == false {
-                    path.parent().unwrap().to_path_buf()
+        let id = viewer.get_cursor_id();
+        let path = match node_map.get_path(&id){
+            Ok(p) => {
+                if p.is_dir() == false {
+                    p.parent().unwrap().to_path_buf()
                 }else {
-                    path
+                    p
                 }
             }
             Err(e) => {return Err(e)}
         };
 
-        return Ok(to_path)
+        return Ok(path)
     }
 
     fn input(&mut self, message: String) -> Result<String> {
@@ -284,6 +284,8 @@ impl CommandRunner{
         self.confirm_overwrite(&new_file_path)?;
         
         fs::File::create(&new_file_path)?;
+        log::info!("New file created: {:?}", &new_file_path);
+
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(
             format!("New file: {}", new_file_path.to_string_lossy()), 
@@ -310,6 +312,8 @@ impl CommandRunner{
         self.confirm_overwrite(&new_dir_path)?;
         
         fs::create_dir(&new_dir_path)?;
+        log::info!("New folder created: {:?}", &new_dir_path);
+
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(
             format!("New folder: {}", new_dir_path.to_string_lossy()), 
@@ -335,12 +339,15 @@ impl CommandRunner{
         if from_path.is_dir() {
             let mut option = fs_extra::dir::CopyOptions::new();
             option.overwrite = true;
+            option.copy_inside = true;
             fs_extra::dir::copy(&from_path, &to_path, &option)?;
         } else {
             let mut option = fs_extra::file::CopyOptions::new();
             option.overwrite = true;
             fs_extra::file::copy(&from_path, &to_path, &option)?;
         }
+
+        log::info!("Copy from: {:?}, to: {:?}", &from_path, &to_path);
 
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(format!("Copy to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
@@ -363,12 +370,14 @@ impl CommandRunner{
         if from_path.is_dir() {
             let mut option = fs_extra::dir::CopyOptions::new();
             option.overwrite = true;
+            option.copy_inside = true;
             fs_extra::dir::move_dir(&from_path, &to_path, &option)?;
         } else {
             let mut option = fs_extra::file::CopyOptions::new();
             option.overwrite = true;
             fs_extra::file::move_file(&from_path, &to_path, &option)?;
         }
+        log::info!("Move from: {:?}, to: {:?}", &from_path, &to_path);
 
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(format!("Move to: {}", to_path.to_string_lossy()), ConsoleMessageStatus::Notify);
@@ -386,8 +395,10 @@ impl CommandRunner{
         };
 
         self.confirm_overwrite(&new_path)?;
-        
+
         fs::rename(&from_path, &new_path)?;
+        log::info!("Rename from: {:?}, to: {:?}", &from_path, &new_path);
+
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(
             format!("Renamed: {}", new_path.to_string_lossy()), 
@@ -407,6 +418,8 @@ impl CommandRunner{
         } else {
             fs::remove_file(&path)?;
         }
+        log::info!("Delete {:?}", &path);
+
         let mut viewer = self.viewer.lock().unwrap();
         viewer.set_console_message(
             format!("Removed: {}", path.to_string_lossy()), 
